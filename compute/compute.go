@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"libvirt.org/go/libvirtxml"
@@ -103,28 +104,6 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 		},
 		CPU: &libvirtxml.DomainCPU{},
 		Devices: &libvirtxml.DomainDeviceList{
-			/*			Disks: []libvirtxml.DomainDisk{
-							{
-								Boot: &libvirtxml.DomainDeviceBoot{
-									Order: 1,
-								},
-								Driver: &libvirtxml.DomainDiskDriver{
-									Name: "qemu",
-									Type: "qcow2",
-								},
-								Device: "disk",
-								Target: &libvirtxml.DomainDiskTarget{
-									Dev: "vda",
-									Bus: "virtio",
-								},
-								Source: &libvirtxml.DomainDiskSource{
-									File: &libvirtxml.DomainDiskSourceFile{
-										File: imagePath,
-									},
-								},
-							},
-						},
-			*/
 			Consoles: []libvirtxml.DomainConsole{
 				{
 					Target: &libvirtxml.DomainConsoleTarget{
@@ -263,13 +242,6 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 		if disk.ExistingPath != "" {
 			// Copy existing disk image
 			copyFile(disk.ExistingPath, diskPath)
-		} else {
-			// Create new disk image
-			err := createDiskImage(diskPath, disk.SizeGB)
-			if err != nil {
-				fmt.Errorf("error creating disk image: %w", err)
-				continue
-			}
 		}
 
 		storageDisk := libvirtxml.DomainDisk{
@@ -287,7 +259,7 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 			},
 			Source: &libvirtxml.DomainDiskSource{
 				File: &libvirtxml.DomainDiskSourceFile{
-					File: diskPath,
+					File: disk.Path,
 				},
 			},
 		}
@@ -296,14 +268,16 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 
 	cdroms := instanceDef.Devices.CDROMs
 	for _, cd := range cdroms {
+		diskTarget := sataDisks[sataIndex]
+		sataIndex++
 		cdromDevice := libvirtxml.DomainDisk{
 			Boot: &libvirtxml.DomainDeviceBoot{
 				Order: uint(cd.BootOrder),
 			},
 			Device: "cdrom",
 			Target: &libvirtxml.DomainDiskTarget{
-				Dev: "hdc",
-				Bus: "ide",
+				Dev: diskTarget,
+				Bus: "sata",
 			},
 			Source: &libvirtxml.DomainDiskSource{
 				File: &libvirtxml.DomainDiskSourceFile{
@@ -321,6 +295,7 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 	}
 
 	// save the domain xml to a file for debugging
+	fmt.Printf("Compute instance path: %s\n", instancePath)
 	err = os.WriteFile(fmt.Sprintf("%s/%s.xml", instancePath, instanceDef.ID), []byte(xmldoc), 0644)
 	if err != nil {
 		fmt.Println(err)
@@ -501,7 +476,7 @@ func GetVM(vmId string) {
 	}
 }
 
-func SendConsoleKeyEvent(vmId string, keycode uint32) {
+func SendConsoleKeyEvent(vmId string, keycodes []uint32) {
 	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 10*time.Second)
 	if err != nil {
 		log.Fatalf("failed to dial libvirt: %v", err)
@@ -515,7 +490,11 @@ func SendConsoleKeyEvent(vmId string, keycode uint32) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	sendErr := l.DomainSendKey(dom, libvirt.DOMAIN_SEND_KEY_FLAGS_RELEASE, []uint32{keycode}, 1, 0)
+
+	// create a uint32 slice with the keycode
+	//keycodes := []uint32{keycode}
+
+	sendErr := l.DomainSendKey(dom, uint32(libvirt.KeycodeSetUsb), 150, keycodes, 0)
 	if err != nil {
 		fmt.Println(sendErr)
 	}
@@ -570,10 +549,10 @@ func randomMACAddress() (string, error) {
 		buf[0], buf[1], buf[2]), nil
 }
 
-func createDiskImage(imagePath string, sizeGB int) error {
+func CreateDiskImage(imagePath string, sizeGB int) error {
 	cmd := fmt.Sprintf("qemu-img create -f qcow2 %s %dG", imagePath, sizeGB)
-	fmt.Println(cmd)
-	out := exec.Command(cmd)
+	runcmd := strings.Split(cmd, " ")
+	out := exec.Command(runcmd[0], runcmd[1:]...)
 	err := out.Run()
 	if err != nil {
 		return err

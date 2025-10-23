@@ -45,6 +45,7 @@ func main() {
 	configureDefaultNetworking()
 	configureDefaultStorage()
 
+	// Setup HTTP server with routes
 	r := chi.NewRouter()
 
 	// A good base middleware stack
@@ -74,6 +75,7 @@ func main() {
 	r.Post("/api/v1/instances", CreateInstance)
 	r.Delete("/api/v1/instances/{id}", DeleteInstance)
 	r.Post("/api/v1/instances/{id}/restart", RestartInstance)
+	r.Post("/api/v1/instances/{id}/sendkeys", SendInstanceConsoleKeys)
 
 	// Datastores
 	r.Get("/api/v1/datastores", ListDatastores)
@@ -94,7 +96,13 @@ func main() {
 
 	r.NotFound(NotFoundHandler)
 	log.Println("Listening on port 80")
-	http.ListenAndServe(":80", r)
+
+	if err := waitForPing("10.0.0.235", 60*time.Second); err != nil {
+		log.Fatalf("Host 10.0.0.235 not reachable: %v", err)
+	}
+	log.Println("Host 10.0.0.235 is reachable, starting server")
+
+	http.ListenAndServe("0.0.0.0:80", r)
 }
 
 // Set the system hostname
@@ -269,5 +277,21 @@ func configureDefaultStorage() {
 		}
 		os.MkdirAll(defaultDatastore.LocalPath, 0755)
 		db.Save(&defaultDatastore)
+	}
+}
+
+// waitForPing pings addr until it responds or timeout elapses.
+func waitForPing(addr string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		// send a single ICMP echo request, wait 1s for reply
+		cmd := exec.Command("ping", "-c", "1", "-W", "1", addr)
+		if err := cmd.Run(); err == nil {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for ping to %s", addr)
+		}
+		time.Sleep(1 * time.Second)
 	}
 }

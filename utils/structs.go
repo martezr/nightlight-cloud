@@ -52,6 +52,7 @@ type StorageDisk struct {
 	BootOrder    int    `json:"bootOrder"`
 	SizeGB       int    `json:"sizeGB"`
 	BusType      string `json:"busType"`
+	Path         string `json:"path"`
 	DatastoreId  string `json:"datastoreId"`
 	ExistingPath string `json:"existingPath"`
 	Clone        bool   `json:"clone"`

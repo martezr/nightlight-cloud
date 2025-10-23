@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os/exec"
 
 	"github.com/lorenzosaino/go-sysctl"
 	"github.com/martezr/go-openvswitch/ovs"
@@ -25,7 +24,7 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 	c.VSwitch.AddBridge("nightlight")
 	c.VSwitch.AddPort("nightlight", "eth0")
 
-	/*eth0, err := netlink.LinkByName("eth0")
+	eth0, err := netlink.LinkByName("eth0")
 	if err != nil {
 		log.Println("Error getting eth0:", err)
 		return
@@ -40,14 +39,8 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 			netlink.AddrDel(eth0, &addr)
 		}
 	}
-	*/
-	flushcmd := exec.Command("ip", "addr", "flush", "dev", "eth0")
-	err := flushcmd.Run()
-	if err != nil {
-		log.Println("Error flushing eth0 addr:", err)
-		return
-	}
 
+	// Assign IP to nightlight bridge
 	link, err := netlink.LinkByName("nightlight")
 	if err != nil {
 		log.Println("Error getting link:", err)
@@ -63,6 +56,7 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 	route := &netlink.Route{
 		LinkIndex: link.Attrs().Index,
 		Gw:        gw,
+		Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
 	}
 	netlink.RouteAdd(route)
 	netlink.LinkSetUp(link)

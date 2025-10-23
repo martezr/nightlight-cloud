@@ -78,6 +78,7 @@ openssh
 swtpm
 edk2
 qemu-system-i386
+nfs-utils
 EOF
 
 #modprobe vhost_net

@@ -48,7 +48,7 @@ func CreateDatastore(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewDecoder(r.Body).Decode(&datastore)
 	datastore.ID = "datastore-" + utils.IDGenerator(10)
 	if datastore.DatastoreType == "local" {
-		baseDirectory := fmt.Sprintf("/opt/nightlight/volumes/%s", datastore.Name)
+		baseDirectory := fmt.Sprintf("/opt/nightlight/volumes/%s", datastore.ID)
 		datastore.LocalPath = baseDirectory
 		err := os.MkdirAll(datastore.LocalPath, 0755)
 		if err != nil {
@@ -56,15 +56,13 @@ func CreateDatastore(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if datastore.DatastoreType == "nfs" {
-		baseDirectory := fmt.Sprintf("/opt/nightlight/volumes/%s", datastore.Name)
+		baseDirectory := fmt.Sprintf("/opt/nightlight/volumes/%s", datastore.ID)
 		datastore.LocalPath = baseDirectory
 		err := os.MkdirAll(baseDirectory, 0755)
 		if err != nil {
 			log.Fatal(err)
 		}
-		cmd := fmt.Sprintf("mount -t nfs %s %s", datastore.Path, datastore.LocalPath)
-		fmt.Println(cmd)
-		out := exec.Command(cmd)
+		out := exec.Command("mount", "-t", "nfs", "-o", "vers=4", datastore.Path, datastore.LocalPath)
 		err = out.Run()
 		if err != nil {
 			log.Fatal(err)
