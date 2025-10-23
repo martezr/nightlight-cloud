@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/go-chi/chi"
 	"github.com/hashicorp/go-hclog"
+	"github.com/martezr/go-openvswitch/ovs"
 	"github.com/martezr/nightlight-cloud/compute"
+	"github.com/martezr/nightlight-cloud/network"
 	"github.com/martezr/nightlight-cloud/utils"
 	"golang.org/x/mobile/event/key"
 )
@@ -58,6 +61,31 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 
 	compute.CreateVM(outputInstance, instancePath)
 	db.Save(&outputInstance)
+	c := ovs.New()
+	ports, err := c.VSwitch.ListPorts("nightlight")
+	if err != nil {
+		hclog.Default().Named("core").Error(err.Error())
+	}
+	var ofPort int
+	for _, port := range ports {
+		fmt.Println("Existing port:", port)
+		portDetails, err := c.VSwitch.Get.Port(port)
+		if err != nil {
+			hclog.Default().Named("core").Error(err.Error())
+		}
+		if portDetails.ExternalIds.AttachedMac == outputInstance.Devices.NetworkInterfaces[0].MacAddress {
+			fmt.Println("Port already exists for MAC:", outputInstance.Devices.NetworkInterfaces[0].MacAddress)
+			iPort, err := strconv.Atoi(portDetails.OFPort)
+			if err != nil {
+				hclog.Default().Named("core").Error(err.Error())
+			} else {
+				ofPort = iPort
+			}
+			return
+		}
+	}
+
+	network.AddVMFlows("nightlight", outputInstance.Devices.NetworkInterfaces[0].MacAddress, ofPort)
 	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(outputInstance))
 }
 
