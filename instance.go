@@ -67,11 +67,19 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 		hclog.Default().Named("core").Error(err.Error())
 	}
 	var ofPort int
+	var metadataOfPort int
 	for _, port := range ports {
 		fmt.Println("Existing port:", port)
 		portDetails, err := c.VSwitch.Get.Port(port)
 		if err != nil {
 			hclog.Default().Named("core").Error(err.Error())
+		}
+		if portDetails.Name == "mddefaultvpc" {
+			metadataOfPort, err = strconv.Atoi(portDetails.OFPort)
+			if err != nil {
+				hclog.Default().Named("core").Error(err.Error())
+			}
+			continue
 		}
 		if portDetails.ExternalIds.AttachedMac == outputInstance.Devices.NetworkInterfaces[0].MacAddress {
 			fmt.Println("Port already exists for MAC:", outputInstance.Devices.NetworkInterfaces[0].MacAddress)
@@ -81,11 +89,11 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 			} else {
 				ofPort = iPort
 			}
-			return
+			//	return
 		}
 	}
 
-	network.AddVMFlows("nightlight", outputInstance.Devices.NetworkInterfaces[0].MacAddress, ofPort)
+	network.AddVMFlows("nightlight", outputInstance.Devices.NetworkInterfaces[0].MacAddress, ofPort, metadataOfPort)
 	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(outputInstance))
 }
 

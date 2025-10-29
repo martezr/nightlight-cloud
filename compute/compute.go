@@ -65,7 +65,7 @@ func copyFile(src, dest string) {
 	}
 }
 
-func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress string) {
+func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.Instance) {
 	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 10*time.Second)
 	if err != nil {
 		log.Fatalf("failed to dial libvirt: %v", err)
@@ -183,14 +183,18 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 	domainDef.OS.Type.Arch = "x86_64"
 	domainDef.OS.Type.Machine = "pc-q35-6.2"
 
-	mac, err := randomMACAddress()
-	if err != nil {
-		fmt.Errorf("error generating mac address: %w", err)
-	}
-
 	// Add network interfaces
 	nics := instanceDef.Devices.NetworkInterfaces
-	for _, nic := range nics {
+	for i, nic := range nics {
+		mac, err := randomMACAddress()
+		if err != nil {
+			fmt.Errorf("error generating mac address: %w", err)
+		}
+		if i == 0 {
+			instanceDef.PrimaryMacAddress = mac
+		}
+		nics[i].MacAddress = mac
+
 		netIface := libvirtxml.DomainInterface{
 			VirtualPort: &libvirtxml.DomainInterfaceVirtualPort{
 				Params: &libvirtxml.DomainInterfaceVirtualPortParams{
@@ -316,7 +320,7 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (macAddress strin
 	if err := l.Disconnect(); err != nil {
 		log.Fatalf("failed to disconnect: %v", err)
 	}
-	return mac
+	return instanceDef
 }
 
 func DeleteVM(vmId string, datastorePath string) {

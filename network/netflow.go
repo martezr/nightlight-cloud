@@ -7,6 +7,13 @@ import (
 	"github.com/martezr/go-openvswitch/ovs"
 )
 
+var (
+	//	MetadataServiceIP   = "169.254.169.254"
+	//	MetadataServiceMAC  = "32:6b:ce:89:41:42"
+	//	MetadataServicePort = 80
+	TableL2Rewrite = 10
+)
+
 func InstallDefaultFlows(bridge string) error {
 	ovsClient := ovs.New()
 
@@ -20,10 +27,22 @@ func InstallDefaultFlows(bridge string) error {
 		return err
 	}
 
+	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
+		Priority: 0,
+		Table:    TableL2Rewrite,
+		Actions: []ovs.Action{
+			ovs.Normal(),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) error {
+	fmt.Println("Adding VM flows for MAC:", vmMac, "on ofPort:", ofPort, "metadataOfPort:", metadataOfPort)
 	ovsClient := ovs.New()
 
 	// convert ofPort to two ip address octets
@@ -79,7 +98,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 		},
 		Table: 0,
 		Actions: []ovs.Action{
-			ovs.Load("0x2", "OXM_OF_ARP[]"), // ARP Reply
+			ovs.Load("0x2", "OXM_OF_ARP_OP[]"), // ARP Reply
 			ovs.ModDataLinkSource(metadataMacHardwareAddress),
 			ovs.ModDataLinkDestination(vmMacHardwareAddress),
 			ovs.SetField(metadataMacAddress, "arp_sha"),
@@ -91,6 +110,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 	})
 
 	if err != nil {
+		fmt.Println("Error adding flow:", err)
 		return err
 	}
 
@@ -108,7 +128,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 		},
 		Table: 0,
 		Actions: []ovs.Action{
-			ovs.Load("0x2", "OXM_OF_ARP[]"), // ARP Reply
+			ovs.Load("0x2", "OXM_OF_ARP_OP[]"), // ARP Reply
 
 			ovs.ModDataLinkSource(vmMacHardwareAddress),
 			ovs.ModDataLinkDestination(metadataMacHardwareAddress),
@@ -122,6 +142,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 	})
 
 	if err != nil {
+		fmt.Println("Error adding flow:", err)
 		return err
 	}
 
@@ -139,11 +160,12 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 		Table: 0,
 		Actions: []ovs.Action{
 			ovs.ConnectionTracking(fmt.Sprintf("zone=%d,commit,nat(src=%s),exec(set_field:%d->ct_mark)", ofPort, vmNatIP, 5)),
-			ovs.Resubmit(0, 1),
+			ovs.Resubmit(0, TableL2Rewrite),
 		},
 	})
 
 	if err != nil {
+		fmt.Println("Error adding flow:", err)
 		return err
 	}
 
@@ -160,17 +182,41 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 			ovs.DataLinkDestination(vmMac),
 			ovs.TransportSourcePort(80),
 		},
-		Table: 0,
+		Table: TableL2Rewrite,
 		Actions: []ovs.Action{
-			ovs.ModifyIPv4Source(metadataIpAddress),
-			ovs.ModifyDataLinkDestination(vmMacHardwareAddress),
+			ovs.SetField("0x1", "metadata"),
+			ovs.ConnectionTracking(fmt.Sprintf("table=%d,zone=%d,nat", TableL2Rewrite, ofPort)),
+		},
+	})
+
+	if err != nil {
+		fmt.Println("Error adding flow:", err)
+		return err
+	}
+
+	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
+		Cookie:   0x1,
+		Priority: 0,
+		InPort:   metadataOfPort,
+		Matches: []ovs.Match{
+			ovs.Metadata(1),
+			ovs.NetworkSource(metadataIpAddress),
+			ovs.DataLinkDestination(vmMac),
+			ovs.TransportSourcePort(80),
+			ovs.ConnectionTrackingState(
+				ovs.SetState(ovs.CTStateEstablished),
+				ovs.SetState(ovs.CTStateTracked),
+			),
+		},
+		Table: TableL2Rewrite,
+		Actions: []ovs.Action{
 			ovs.Output(ofPort),
 		},
 	})
 
 	if err != nil {
+		fmt.Println("Error adding flow:", err)
 		return err
 	}
-
 	return nil
 }
