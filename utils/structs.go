@@ -23,7 +23,9 @@ type Instance struct {
 	InstanceProfile      string                   `json:"instanceProfile"`
 	DatastoreId          string                   `json:"datastoreId"`
 	Kickstart            string                   `json:"kickstart"`
-	WinAutoattend        string                   `json:"winAutattend"`
+	WinAutoattend        string                   `json:"winAutoattend"`
+	SecureBoot           bool                     `json:"secureBoot"`
+	TPM                  bool                     `json:"tpm"`
 	UserData             string                   `json:"userData"`
 	VNCPort              int                      `json:"vncPort"`
 	Tags                 []map[string]interface{} `json:"tags"`

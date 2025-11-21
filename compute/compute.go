@@ -89,7 +89,7 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 	demo.Entry = []libvirtxml.DomainSysInfoEntry{t1, t2}
 	test.System = &demo
 	top.SMBIOS = &test
-	cpu, memory := instanceDef.CPUSockets, instanceDef.MemoryMB
+	memory := instanceDef.MemoryMB
 	domainDef := libvirtxml.Domain{
 		UUID:     vmUUID,
 		SysInfo:  []libvirtxml.DomainSysInfo{top},
@@ -100,10 +100,30 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 		},
 		VCPU: &libvirtxml.DomainVCPU{
 			Placement: "static",
-			Value:     uint(cpu),
+			Value:     uint(instanceDef.CPUCores * instanceDef.CPUSockets),
 		},
-		CPU: &libvirtxml.DomainCPU{},
+		CPU: &libvirtxml.DomainCPU{
+			Mode:       "host-passthrough",
+			Check:      "none",
+			Migratable: "on",
+			Topology: &libvirtxml.DomainCPUTopology{
+				Sockets: instanceDef.CPUSockets,
+				Cores:   instanceDef.CPUCores,
+				Threads: 1,
+			},
+		},
 		Devices: &libvirtxml.DomainDeviceList{
+			Emulator: "/usr/bin/qemu-system-x86_64",
+			Controllers: []libvirtxml.DomainController{
+				{
+					Type:  "pci",
+					Model: "pcie-root",
+					Index: new(uint),
+					Alias: &libvirtxml.DomainAlias{
+						Name: "pcie.0",
+					},
+				},
+			},
 			Consoles: []libvirtxml.DomainConsole{
 				{
 					Target: &libvirtxml.DomainConsoleTarget{
@@ -181,7 +201,48 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 		}
 	}
 	domainDef.OS.Type.Arch = "x86_64"
-	domainDef.OS.Type.Machine = "pc-q35-6.2"
+	domainDef.OS.Type.Machine = "pc-q35-10.0"
+
+	if instanceDef.SecureBoot {
+		domainDef.OS.FirmwareInfo = &libvirtxml.DomainOSFirmwareInfo{
+			Features: []libvirtxml.DomainOSFirmwareFeature{
+				{Name: "secure-boot", Enabled: "yes"},
+				{Name: "enrolled-keys", Enabled: "no"},
+			},
+		}
+		domainDef.OS.Loader.Secure = "yes"
+		domainDef.OS.Loader.Readonly = "yes"
+		domainDef.OS.Loader.Type = "pflash"
+		domainDef.OS.Loader.Path = "/etc/OVMF_CODE_4M.ms.fd"
+		domainDef.OS.Loader.Format = "raw"
+		// NVRAM Template
+		domainDef.OS.NVRam = &libvirtxml.DomainNVRam{
+			Template: "/etc/OVMF_VARS_4M.ms.fd",
+			NVRam:    fmt.Sprintf("/var/lib/libvirt/qemu/nvram/%s_VARS.fd", instanceDef.ID),
+			Format:   "raw",
+		}
+		domainDef.Features = &libvirtxml.DomainFeatureList{
+			PAE:  &libvirtxml.DomainFeature{},
+			ACPI: &libvirtxml.DomainFeature{},
+			APIC: &libvirtxml.DomainFeatureAPIC{},
+			SMM: &libvirtxml.DomainFeatureSMM{
+				State: "on",
+			},
+		}
+	}
+
+	if instanceDef.TPM {
+		domainDef.Devices.TPMs = []libvirtxml.DomainTPM{
+			{
+				Model: "tpm-tis",
+				Backend: &libvirtxml.DomainTPMBackend{
+					Emulator: &libvirtxml.DomainTPMBackendEmulator{
+						Version: "2.0",
+					},
+				},
+			},
+		}
+	}
 
 	// Add network interfaces
 	nics := instanceDef.Devices.NetworkInterfaces
@@ -291,6 +352,38 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 			ReadOnly: &libvirtxml.DomainDiskReadOnly{},
 		}
 		domainDef.Devices.Disks = append(domainDef.Devices.Disks, cdromDevice)
+	}
+
+	if instanceDef.WinAutoattend != "" {
+		// create floppy directory in instance path
+		err := os.MkdirAll(fmt.Sprintf("%s/floppy", instancePath), os.ModePerm)
+		if err != nil {
+			fmt.Println(err)
+		}
+		// write win autattend file to instance path
+		err = os.WriteFile(fmt.Sprintf("%s/floppy/autounattend.xml", instancePath), []byte(instanceDef.WinAutoattend), 0644)
+		if err != nil {
+			fmt.Println(err)
+		}
+		// add floppy drive with autounattend.xml
+		floppyDevice := libvirtxml.DomainDisk{
+			ReadOnly: &libvirtxml.DomainDiskReadOnly{},
+			Driver: &libvirtxml.DomainDiskDriver{
+				Name: "qemu",
+				Type: "fat",
+			},
+			Device: "floppy",
+			Target: &libvirtxml.DomainDiskTarget{
+				Dev: "fda",
+				//	Bus: "fdc",
+			},
+			Source: &libvirtxml.DomainDiskSource{
+				Dir: &libvirtxml.DomainDiskSourceDir{
+					Dir: fmt.Sprintf("%s/floppy", instancePath),
+				},
+			},
+		}
+		domainDef.Devices.Disks = append(domainDef.Devices.Disks, floppyDevice)
 	}
 
 	xmldoc, err := domainDef.Marshal()

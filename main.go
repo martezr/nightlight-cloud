@@ -37,12 +37,12 @@ func main() {
 	db = database.StartDB(".")
 
 	// Perform base configuration
-	baseConfiguration()
+	//baseConfiguration()
 
 	// Setup networking
-	network.SetupBaseNetworking()
+	//network.SetupBaseNetworking()
 
-	configureDefaultNetworking()
+	//configureDefaultNetworking()
 	configureDefaultStorage()
 
 	// Setup HTTP server with routes
@@ -97,12 +97,11 @@ func main() {
 	r.NotFound(NotFoundHandler)
 	log.Println("Listening on port 80")
 
-	if err := waitForPing("10.0.0.235", 60*time.Second); err != nil {
-		log.Fatalf("Host 10.0.0.235 not reachable: %v", err)
+	//http.ListenAndServe(":80", r)
+	err := http.ListenAndServe(":80", r)
+	if err != nil {
+		log.Fatalf("Server failed to start: %v", err)
 	}
-	log.Println("Host 10.0.0.235 is reachable, starting server")
-
-	http.ListenAndServe("0.0.0.0:80", r)
 }
 
 // Set the system hostname
@@ -189,6 +188,8 @@ func baseConfiguration() {
 	if err != nil {
 		log.Fatalf("Error enabling SSH password authentication: %v", err)
 	}
+
+	UpdateUEFIImages()
 }
 
 func NewVNCProxy() *vncproxy.Proxy {
@@ -294,4 +295,45 @@ func waitForPing(addr string, timeout time.Duration) error {
 		}
 		time.Sleep(1 * time.Second)
 	}
+}
+
+func UpdateUEFIImages() {
+	text := `
+	{
+    "description": "UEFI firmware for x86_64, with Secure Boot and SMM",
+    "interface-types": [
+        "uefi"
+    ],
+    "mapping": {
+        "device": "flash",
+        "executable": {
+            "filename": "/etc/OVMF_CODE_4M.ms.fd",
+            "format": "raw"
+        },
+        "nvram-template": {
+            "filename": "/etc/OVMF_VARS_4M.ms.fd",
+            "format": "raw"
+        }
+    },
+    "targets": [
+        {
+            "architecture": "x86_64",
+            "machines": [
+                "pc-q35-*"
+            ]
+        }
+    ],
+    "features": [
+        "acpi-s3",
+        "amd-sev",
+        "requires-smm",
+        "secure-boot",
+        "verbose-dynamic"
+    ],
+    "tags": [
+
+    ]
+}`
+	os.WriteFile("/usr/share/qemu/firmware/50-edk2-x86_64-secure.json", []byte(text), 0644)
+
 }

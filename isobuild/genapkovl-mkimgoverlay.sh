@@ -33,6 +33,11 @@ $HOSTNAME
 EOF
 
 cp /aports/scripts/nightlight-cloud "$tmp"/etc/nightlight-cloud
+cp /aports/scripts/OVMF_CODE.secboot.fd "$tmp"/etc/OVMF_CODE.secboot.fd
+cp /aports/scripts/OVMF_VARS.secboot.fd "$tmp"/etc/OVMF_VARS.secboot.fd
+cp /aports/scripts/OVMF_CODE_4M.ms.fd "$tmp"/etc/OVMF_CODE_4M.ms.fd
+cp /aports/scripts/OVMF_VARS_4M.ms.fd "$tmp"/etc/OVMF_VARS_4M.ms.fd
+
 chmod 755 "$tmp"/etc/nightlight-cloud
 
 # create a service file for nightlight-cloud
@@ -59,6 +64,11 @@ auto eth0
 iface eth0 inet dhcp
 EOF
 
+mkdir -p "$tmp"/etc/modules-load.d
+makefile root:root 0644 "$tmp"/etc/modules-load.d/kvm.conf <<EOF
+kvm_intel
+EOF
+	
 mkdir -p "$tmp"/etc/apk
 makefile root:root 0644 "$tmp"/etc/apk/world <<EOF
 alpine-base
@@ -81,7 +91,8 @@ qemu-system-i386
 nfs-utils
 EOF
 
-#modprobe vhost_net
+#modprobe kvm_intel
+#chmod 777 /dev/kvm
 
 rc_add devfs sysinit
 rc_add dmesg sysinit

@@ -120,6 +120,36 @@ func DeleteInstance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		hclog.Default().Named("core").Error(err.Error())
 	}
+	// Remove instance directory
+	instancePath := fmt.Sprintf("%s/%s", datastore.LocalPath, instance.ID)
+	err = os.RemoveAll(instancePath)
+	if err != nil {
+		hclog.Default().Named("core").Error(err.Error())
+	}
+
+	// Remove OVS flows
+	c := ovs.New()
+	ports, err := c.VSwitch.ListPorts("nightlight")
+	if err != nil {
+		hclog.Default().Named("core").Error(err.Error())
+	}
+	var ofPort int
+	for _, port := range ports {
+		portDetails, err := c.VSwitch.Get.Port(port)
+		if err != nil {
+			hclog.Default().Named("core").Error(err.Error())
+		}
+		if portDetails.ExternalIds.AttachedMac == instance.Devices.NetworkInterfaces[0].MacAddress {
+			iPort, err := strconv.Atoi(portDetails.OFPort)
+			if err != nil {
+				hclog.Default().Named("core").Error(err.Error())
+			} else {
+				ofPort = iPort
+			}
+		}
+	}
+
+	network.RemoveVMFlows("nightlight", ofPort)
 }
 
 func RestartInstance(w http.ResponseWriter, r *http.Request) {

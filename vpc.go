@@ -76,3 +76,13 @@ func DeleteVPC(w http.ResponseWriter, r *http.Request) {
 		hclog.Default().Named("core").Error(err.Error())
 	}
 }
+
+func FindVPCByName(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	var vpc VPC
+	err := db.One("Name", name, &vpc)
+	if err != nil {
+		hclog.Default().Named("core").Error(err.Error())
+	}
+	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(vpc))
+}

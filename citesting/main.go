@@ -106,14 +106,15 @@ func createVM(client *govmomi.Client, ctx context.Context, finder *find.Finder) 
 	}
 
 	spec := &types.VirtualMachineConfigSpec{
-		Name:            "nldemo",
-		NumCPUs:         4,
-		MemoryMB:        8192,
-		Annotation:      "nightlight",
-		NestedHVEnabled: types.NewBool(true),
-		Firmware:        string(types.GuestOsDescriptorFirmwareTypeBios),
-		Version:         "vmx-19",
-		GuestId:         string(types.VirtualMachineGuestOsIdentifierOther5xLinux64Guest),
+		Name:              "nldemo",
+		NumCPUs:           2,
+		NumCoresPerSocket: 8,
+		MemoryMB:          32768,
+		Annotation:        "nightlight",
+		NestedHVEnabled:   types.NewBool(true),
+		Firmware:          string(types.GuestOsDescriptorFirmwareTypeBios),
+		Version:           "vmx-19",
+		GuestId:           string(types.VirtualMachineGuestOsIdentifierOther5xLinux64Guest),
 		Files: &types.VirtualMachineFileInfo{
 			VmPathName: "[Local]",
 		},
@@ -157,7 +158,7 @@ func createVM(client *govmomi.Client, ctx context.Context, finder *find.Finder) 
 	}
 
 	var b units.ByteSize
-	b.Set("10GB")
+	b.Set("200GB")
 
 	disk := &types.VirtualDisk{
 		VirtualDevice: types.VirtualDevice{

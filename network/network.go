@@ -18,11 +18,12 @@ func SetupBaseNetworking() {
 	}
 	c := ovs.New()
 	ConfigureManagementNetwork(c)
+	ConfigureDefaultVPCNetworking(c)
 }
 
 func ConfigureManagementNetwork(c *ovs.Client) {
-	c.VSwitch.AddBridge("nightlight")
-	c.VSwitch.AddPort("nightlight", "eth0")
+	c.VSwitch.AddBridge("nl-external")
+	c.VSwitch.AddPort("nl-external", "eth0")
 
 	eth0, err := netlink.LinkByName("eth0")
 	if err != nil {
@@ -40,14 +41,14 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 		}
 	}
 
-	// Assign IP to nightlight bridge
-	link, err := netlink.LinkByName("nightlight")
+	// Assign IP to nl-external bridge
+	link, err := netlink.LinkByName("nl-external")
 	if err != nil {
 		log.Println("Error getting link:", err)
 		return
 	}
 	netlink.AddrAdd(link, &netlink.Addr{IPNet: &net.IPNet{
-		IP:   net.ParseIP("10.0.0.235"),
+		IP:   net.ParseIP("10.0.0.237"),
 		Mask: net.CIDRMask(24, 32),
 	}})
 
@@ -60,4 +61,20 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 	}
 	netlink.RouteAdd(route)
 	netlink.LinkSetUp(link)
+}
+
+func ConfigureDefaultVPCNetworking(c *ovs.Client) {
+	c.VSwitch.AddBridge("nightlight")
+	c.VSwitch.AddPort("nl-external", "nightlight-patch")
+	c.VSwitch.AddPort("nightlight", "nl-external-patch")
+
+	c.VSwitch.Set.Interface("nl-external-patch", ovs.InterfaceOptions{
+		Type: "patch",
+		Peer: "nightlight-patch",
+	})
+
+	c.VSwitch.Set.Interface("nightlight-patch", ovs.InterfaceOptions{
+		Type: "patch",
+		Peer: "nl-external-patch",
+	})
 }
