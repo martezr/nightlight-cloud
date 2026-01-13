@@ -1,5 +1,5 @@
 # create custom alpine linux iso using aports
-FROM alpine:latest
+FROM alpine:3.22
 RUN apk update && apk upgrade
 RUN apk add --no-cache bash curl xorriso syslinux mtools abuild alpine-conf squashfs-tools grub git doas openssh coreutils
 RUN git clone --depth=1 https://gitlab.alpinelinux.org/alpine/aports.git

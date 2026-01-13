@@ -31,18 +31,18 @@ var (
 var webui embed.FS
 
 func main() {
-	log.Println("nightlight-cloud 0.0.1")
+	log.Println("nightlight-cloud 0.0.2")
 
 	// Connect to the database
 	db = database.StartDB(".")
 
 	// Perform base configuration
-	//baseConfiguration()
+	baseConfiguration()
 
 	// Setup networking
-	//network.SetupBaseNetworking()
+	network.SetupBaseNetworking()
 
-	//configureDefaultNetworking()
+	configureDefaultNetworking()
 	configureDefaultStorage()
 
 	// Setup HTTP server with routes
@@ -245,22 +245,21 @@ func configureDefaultNetworking() {
 		log.Fatalf("Error creating network namespace: %v", err)
 	}
 
-	/*
-		// Create dhcp network namespace and OVS interface
-		ovsClient.VSwitch.AddPort("nightlight", "dhdefaultvpc")
-		ovsClient.VSwitch.Set.Interface("dhdefaultvpc", ovs.InterfaceOptions{
-			Type: "internal",
-			ExternalIds: map[string]string{
-				"iface-id":     "dhdefaultvpc",
-				"attached-mac": "32:6b:ce:89:41:43",
-			},
-		})
+	// Create dhcp network namespace and OVS interface
+	ovsClient.VSwitch.AddPort("nightlight", "dhdefaultvpc")
+	ovsClient.VSwitch.Set.Interface("dhdefaultvpc", ovs.InterfaceOptions{
+		Type: "internal",
+		ExternalIds: map[string]string{
+			"iface-id":     "dhdefaultvpc",
+			"attached-mac": "32:6b:ce:89:41:43",
+		},
+	})
 
-		err = network.CreateNetworkNamespace("dhdefaultvpc", "32:6b:ce:89:41:43", "169.254.169.253")
-		if err != nil {
-			log.Fatalf("Error creating network namespace: %v", err)
-		}
-	*/
+	err = network.CreateNetworkNamespace("dhdefaultvpc", "32:6b:ce:89:41:43", "169.254.169.253")
+	if err != nil {
+		log.Fatalf("Error creating network namespace: %v", err)
+	}
+
 }
 
 func configureDefaultStorage() {
