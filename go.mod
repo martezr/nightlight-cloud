@@ -20,7 +20,7 @@ require (
 	libvirt.org/go/libvirtxml v1.10003.0
 )
 
-replace github.com/martezr/go-openvswitch => ../go-openvswitch
+//replace github.com/martezr/go-openvswitch => ../go-openvswitch
 
 require (
 	github.com/BurntSushi/toml v1.1.0 // indirect

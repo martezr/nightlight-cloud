@@ -12,6 +12,7 @@ import (
 	"github.com/asdine/storm/v3"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/hashicorp/go-hclog"
 
 	"github.com/martezr/go-openvswitch/ovs"
 	"github.com/martezr/nightlight-cloud/database"
@@ -31,18 +32,32 @@ var (
 var webui embed.FS
 
 func main() {
-	log.Println("nightlight-cloud 0.0.1")
+	fmt.Println("==> Nightlight cloud:")
+	fmt.Println("")
+	mess := fmt.Sprintf(
+		"%24s: %s",
+		"API Address",
+		fmt.Sprintf("0.0.0.0:%s", "80"))
+	fmt.Println(mess)
+	vauthVersion := fmt.Sprintf(
+		"%24s: %s",
+		"Version",
+		"Nightlight cloud v0.0.1")
+	fmt.Println(vauthVersion)
+	fmt.Println("")
+	fmt.Println("==> Nightlight cloud started! Log data will stream in below:")
+	fmt.Println("")
 
 	// Connect to the database
 	db = database.StartDB(".")
 
 	// Perform base configuration
-	//baseConfiguration()
+	baseConfiguration()
 
 	// Setup networking
-	//network.SetupBaseNetworking()
+	network.SetupBaseNetworking()
 
-	//configureDefaultNetworking()
+	configureDefaultNetworking()
 	configureDefaultStorage()
 
 	// Setup HTTP server with routes
@@ -95,10 +110,12 @@ func main() {
 	//})
 
 	r.NotFound(NotFoundHandler)
-	log.Println("Listening on port 80")
-
+	hclog.Default().Named("core").Info("Waiting 30 seconds for network to come up...")
+	time.Sleep(30 * time.Second)
+	hclog.Default().Named("core").Info("Web UI available at http://<host-ip>:80/")
+	hclog.Default().Named("core").Info("Default login: root / nightlight")
 	//http.ListenAndServe(":80", r)
-	err := http.ListenAndServe(":80", r)
+	err := http.ListenAndServe("0.0.0.0:80", r)
 	if err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
@@ -272,9 +289,12 @@ func configureDefaultStorage() {
 	}
 	if len(datastores) == 0 {
 		defaultDatastore := Datastore{
-			ID:        "defaultdatastore",
-			Name:      "defaultdatastore",
-			LocalPath: "/opt/nightlight/volumes/defaultdatastore",
+			ID:            "defaultdatastore",
+			Name:          "defaultdatastore",
+			Description:   "Default nightlight cloud datastore",
+			DatastoreType: "local",
+			Path:          "/opt/nightlight/volumes/defaultdatastore",
+			LocalPath:     "/opt/nightlight/volumes/defaultdatastore",
 		}
 		os.MkdirAll(defaultDatastore.LocalPath, 0755)
 		db.Save(&defaultDatastore)

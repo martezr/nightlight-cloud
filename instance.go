@@ -31,8 +31,19 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 	outputInstance := instance
 	outputInstance.ID = "i-" + utils.IDGenerator(10)
 
+	hclog.Default().Named("core").Info(fmt.Sprintf("Creating instance: %+v", instance))
+	if instance.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
 	if instance.DatastoreId == "" {
 		http.Error(w, "datastoreId is required", http.StatusBadRequest)
+		return
+	}
+
+	if instance.Devices.NetworkInterfaces[0].BridgeName == "" {
+		http.Error(w, "vpcId is required", http.StatusBadRequest)
 		return
 	}
 
@@ -89,7 +100,6 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 			} else {
 				ofPort = iPort
 			}
-			//	return
 		}
 	}
 

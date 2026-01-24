@@ -5,13 +5,14 @@ import (
 	"log"
 	"net"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/lorenzosaino/go-sysctl"
 	"github.com/martezr/go-openvswitch/ovs"
 	"github.com/vishvananda/netlink"
 )
 
 func SetupBaseNetworking() {
-	log.Println("Setting up networking")
+	hclog.Default().Named("network").Info("Setting up networking")
 	err := sysctl.Set("net.ipv4.ip_forward", "1")
 	if err != nil {
 		fmt.Println(err)
@@ -22,6 +23,25 @@ func SetupBaseNetworking() {
 }
 
 func ConfigureManagementNetwork(c *ovs.Client) {
+
+	// Check if bridge "nl-external" already exists
+	bridgeExists := false
+	bridges, err := netlink.LinkList()
+	if err != nil {
+		log.Println("Error listing links:", err)
+	} else {
+		for _, l := range bridges {
+			if l.Type() == "bridge" && l.Attrs().Name == "nl-external" {
+				bridgeExists = true
+				break
+			}
+		}
+	}
+
+	if bridgeExists {
+		return
+	}
+
 	c.VSwitch.AddBridge("nl-external")
 	c.VSwitch.AddPort("nl-external", "eth0")
 
@@ -52,6 +72,7 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 		Mask: net.CIDRMask(24, 32),
 	}})
 
+	netlink.LinkSetUp(link)
 	// Set default route via eth0 gateway
 	gw := net.ParseIP("10.0.0.1")
 	route := &netlink.Route{
@@ -60,7 +81,6 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 		Dst:       &net.IPNet{IP: net.IPv4zero, Mask: net.CIDRMask(0, 32)},
 	}
 	netlink.RouteAdd(route)
-	netlink.LinkSetUp(link)
 }
 
 func ConfigureDefaultVPCNetworking(c *ovs.Client) {
