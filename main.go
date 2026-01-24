@@ -262,22 +262,21 @@ func configureDefaultNetworking() {
 		log.Fatalf("Error creating network namespace: %v", err)
 	}
 
-	/*
-		// Create dhcp network namespace and OVS interface
-		ovsClient.VSwitch.AddPort("nightlight", "dhdefaultvpc")
-		ovsClient.VSwitch.Set.Interface("dhdefaultvpc", ovs.InterfaceOptions{
-			Type: "internal",
-			ExternalIds: map[string]string{
-				"iface-id":     "dhdefaultvpc",
-				"attached-mac": "32:6b:ce:89:41:43",
-			},
-		})
+	// Create dhcp network namespace and OVS interface
+	ovsClient.VSwitch.AddPort("nightlight", "dhdefaultvpc")
+	ovsClient.VSwitch.Set.Interface("dhdefaultvpc", ovs.InterfaceOptions{
+		Type: "internal",
+		ExternalIds: map[string]string{
+			"iface-id":     "dhdefaultvpc",
+			"attached-mac": "32:6b:ce:89:41:43",
+		},
+	})
 
-		err = network.CreateNetworkNamespace("dhdefaultvpc", "32:6b:ce:89:41:43", "169.254.169.253")
-		if err != nil {
-			log.Fatalf("Error creating network namespace: %v", err)
-		}
-	*/
+	err = network.CreateNetworkNamespace("dhdefaultvpc", "32:6b:ce:89:41:43", "169.254.169.253")
+	if err != nil {
+		log.Fatalf("Error creating network namespace: %v", err)
+	}
+
 }
 
 func configureDefaultStorage() {

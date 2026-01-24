@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/hashicorp/go-getter/v2 v2.2.3
 	github.com/hashicorp/go-hclog v1.6.3
+	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
 	github.com/lorenzosaino/go-sysctl v0.3.1
 	github.com/martezr/go-openvswitch v0.0.0-20250815183327-516c744b7db8
 	github.com/ovn-org/libovsdb v0.6.0
@@ -18,6 +19,12 @@ require (
 	github.com/vishvananda/netns v0.0.5
 	go.etcd.io/bbolt v1.3.10
 	libvirt.org/go/libvirtxml v1.10003.0
+)
+
+require (
+	github.com/josharian/native v1.1.0 // indirect
+	github.com/pierrec/lz4/v4 v4.1.14 // indirect
+	github.com/u-root/uio v0.0.0-20230220225925-ffce2a382923 // indirect
 )
 
 //replace github.com/martezr/go-openvswitch => ../go-openvswitch
