@@ -17,6 +17,7 @@ import (
 type Datastore struct {
 	ID            string                   `json:"id" storm:"id,index"`
 	Name          string                   `json:"name"`
+	Description   string                   `json:"description"`
 	DatastoreType string                   `json:"type"`
 	Path          string                   `json:"path"`
 	LocalPath     string                   `json:"localPath"`
@@ -88,6 +89,22 @@ func DeleteDatastore(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		hclog.Default().Named("core").Error(err.Error())
 	}
+
+	if datastore.DatastoreType == "local" {
+		err := os.RemoveAll(datastore.LocalPath)
+		if err != nil {
+			hclog.Default().Named("core").Error(fmt.Sprintf("failed to delete local folder: %v", err))
+		}
+	}
+
+	if datastore.DatastoreType == "nfs" {
+		out := exec.Command("umount", datastore.LocalPath)
+		err = out.Run()
+		if err != nil {
+			hclog.Default().Named("core").Error(fmt.Sprintf("failed to unmount nfs: %v", err))
+		}
+	}
+
 	err = db.DeleteStruct(&datastore)
 	if err != nil {
 		hclog.Default().Named("core").Error(err.Error())

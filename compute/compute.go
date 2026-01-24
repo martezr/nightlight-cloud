@@ -265,6 +265,7 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 			Model: &libvirtxml.DomainInterfaceModel{
 				Type: nic.Model,
 			},
+			ROM: &libvirtxml.DomainROM{},
 			MAC: &libvirtxml.DomainInterfaceMAC{
 				Address: mac,
 			},
@@ -278,6 +279,14 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 		if nic.BootOrder > 0 {
 			netIface.Boot = &libvirtxml.DomainDeviceBoot{
 				Order: uint(nic.BootOrder),
+			}
+		}
+
+		if nic.Model == "virtio" {
+			romFile := "/etc/virtio-net.rom"
+			netIface.ROM = &libvirtxml.DomainROM{
+				File:    &romFile,
+				Enabled: "on",
 			}
 		}
 

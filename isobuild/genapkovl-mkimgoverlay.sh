@@ -37,6 +37,7 @@ cp /aports/scripts/OVMF_CODE.secboot.fd "$tmp"/etc/OVMF_CODE.secboot.fd
 cp /aports/scripts/OVMF_VARS.secboot.fd "$tmp"/etc/OVMF_VARS.secboot.fd
 cp /aports/scripts/OVMF_CODE_4M.ms.fd "$tmp"/etc/OVMF_CODE_4M.ms.fd
 cp /aports/scripts/OVMF_VARS_4M.ms.fd "$tmp"/etc/OVMF_VARS_4M.ms.fd
+cp /aports/scripts/virtio-net.rom "$tmp"/etc/virtio-net.rom
 
 chmod 755 "$tmp"/etc/nightlight-cloud
 

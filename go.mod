@@ -27,7 +27,7 @@ require (
 	github.com/u-root/uio v0.0.0-20230220225925-ffce2a382923 // indirect
 )
 
-replace github.com/martezr/go-openvswitch => ../go-openvswitch
+//replace github.com/martezr/go-openvswitch => ../go-openvswitch
 
 require (
 	github.com/BurntSushi/toml v1.1.0 // indirect

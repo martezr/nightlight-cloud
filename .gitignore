@@ -1,3 +1,4 @@
 *.iso
 nightlight-cloud
 webui/node_modules
+metadataagent/metadataagent

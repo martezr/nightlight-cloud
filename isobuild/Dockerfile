@@ -22,5 +22,6 @@ COPY OVMF_CODE.secboot.fd aports/scripts/OVMF_CODE.secboot.fd
 COPY OVMF_VARS.secboot.fd aports/scripts/OVMF_VARS.secboot.fd
 COPY OVMF_CODE_4M.ms.fd aports/scripts/OVMF_CODE_4M.ms.fd
 COPY OVMF_VARS_4M.ms.fd aports/scripts/OVMF_VARS_4M.ms.fd
+COPY virtio-net.rom aports/scripts/virtio-net.rom
 
 CMD ["sh", "aports/scripts/mkimage.sh", "--tag", "v3.22", "--arch", "x86_64", "--outdir", "/iso", "--repository", "http://dl-cdn.alpinelinux.org/alpine/v3.22/main", "--repository","http://dl-cdn.alpinelinux.org/alpine/v3.22/community", "--profile", "nightlight"]
