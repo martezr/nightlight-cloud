@@ -29,6 +29,7 @@ type Instance struct {
 	UserData             string                   `json:"userData"`
 	VNCPort              int                      `json:"vncPort"`
 	Tags                 []map[string]interface{} `json:"tags"`
+	CreatedAt            string                   `json:"createdAt"`
 }
 
 type Devices struct {
@@ -39,18 +40,21 @@ type Devices struct {
 }
 
 type FloppyDisk struct {
-	BootOrder int    `json:"bootOrder"`
-	Connected bool   `json:"connected"`
-	Path      string `json:"path"`
+	IndexNumber int    `json:"indexNumber"`
+	BootOrder   int    `json:"bootOrder"`
+	Connected   bool   `json:"connected"`
+	Path        string `json:"path"`
 }
 
 type CDROM struct {
-	BootOrder int    `json:"bootOrder"`
-	Connected bool   `json:"connected"`
-	Path      string `json:"path"`
+	IndexNumber int    `json:"indexNumber"`
+	BootOrder   int    `json:"bootOrder"`
+	Connected   bool   `json:"connected"`
+	Path        string `json:"path"`
 }
 
 type StorageDisk struct {
+	IndexNumber  int    `json:"indexNumber"`
 	BootOrder    int    `json:"bootOrder"`
 	SizeGB       int    `json:"sizeGB"`
 	BusType      string `json:"busType"`
@@ -61,9 +65,11 @@ type StorageDisk struct {
 }
 
 type NetworkInterface struct {
-	BootOrder  int    `json:"bootOrder"`
-	Model      string `json:"model"`
-	Connected  bool   `json:"connected"`
-	MacAddress string `json:"macAddress"`
-	BridgeName string `json:"bridgeName"`
+	IndexNumber int    `json:"indexNumber"`
+	BootOrder   int    `json:"bootOrder"`
+	Model       string `json:"model"`
+	Connected   bool   `json:"connected"`
+	MacAddress  string `json:"macAddress"`
+	BridgeName  string `json:"bridgeName"`
+	VPCId       string `json:"vpcId"`
 }

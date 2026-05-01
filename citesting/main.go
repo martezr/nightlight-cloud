@@ -18,17 +18,19 @@ import (
 
 type extraConfig []types.BaseOptionValue
 
+var (
+	vsphereServer    = "192.168.3.4"
+	vsphereUsername  = "administrator@vsphere.local"
+	vspherePassword  = "Password123#"
+	datacenterName   = "RiverMeadow"
+	datastoreName    = "datastore1"
+	isoLocalPath     = "../isobuild/iso/alpine-nightlight-v3.22-x86_64.iso"
+	isoDatastorePath = "ISO/alpine-nightlight-v3.22-x86_64.iso"
+	networkName      = "External Management Network"
+)
+
 func main() {
 	ctx := context.Background()
-
-	// Set these variables as needed
-	vsphereServer := "grtvcenter01.grt.local"
-	vsphereUsername := "administrator@vsphere.local"
-	vspherePassword := "Password123#"
-	datacenterName := "GRT"
-	datastoreName := "Local"
-	isoLocalPath := "../isobuild/iso/alpine-nightlight-v3.22-x86_64.iso"
-	isoDatastorePath := "ISO/alpine-nightlight-v3.22-x86_64.iso"
 
 	vcenterURL, err := url.Parse(fmt.Sprintf("https://%v/sdk", vsphereServer))
 	if err != nil {
@@ -112,11 +114,12 @@ func createVM(client *govmomi.Client, ctx context.Context, finder *find.Finder) 
 		MemoryMB:          32768,
 		Annotation:        "nightlight",
 		NestedHVEnabled:   types.NewBool(true),
-		Firmware:          string(types.GuestOsDescriptorFirmwareTypeBios),
-		Version:           "vmx-19",
-		GuestId:           string(types.VirtualMachineGuestOsIdentifierOther5xLinux64Guest),
+		//Firmware:          string(types.GuestOsDescriptorFirmwareTypeBios),
+		Firmware: string(types.GuestOsDescriptorFirmwareTypeEfi),
+		Version:  "vmx-19",
+		GuestId:  string(types.VirtualMachineGuestOsIdentifierOther5xLinux64Guest),
 		Files: &types.VirtualMachineFileInfo{
-			VmPathName: "[Local]",
+			VmPathName: "[datastore1]",
 		},
 	}
 
@@ -128,7 +131,7 @@ func createVM(client *govmomi.Client, ctx context.Context, finder *find.Finder) 
 		ExtraConfig: settings,
 	}
 	spec.ExtraConfig = authSpec.ExtraConfig
-	network, err := finder.NetworkOrDefault(ctx, "VM Network")
+	network, err := finder.NetworkOrDefault(ctx, networkName)
 	if err != nil {
 		log.Println(err)
 	}
@@ -195,7 +198,7 @@ func createVM(client *govmomi.Client, ctx context.Context, finder *find.Finder) 
 	}
 
 	//devices.AssignController(cdrom, ideController)
-	devices.InsertIso(cdrom, "[Local] ISO/alpine-nightlight-v3.22-x86_64.iso")
+	devices.InsertIso(cdrom, "[datastore1] ISO/alpine-nightlight-v3.22-x86_64.iso")
 
 	devices = append(devices, cdrom)
 

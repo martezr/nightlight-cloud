@@ -37,6 +37,6 @@ func NotFoundHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	err = tryRead(webui, "webui/dist", "index.html", w)
 	if err != nil {
-		panic(err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 	}
 }

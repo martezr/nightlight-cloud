@@ -56,6 +56,7 @@ async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
     "type": intData.datastoreType || "",
     "description": intData.description || "",
     "localPath": intData.localPath || "",
+    "path": intData.path || "",
   };
 
   try {
@@ -171,6 +172,12 @@ async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
                       <div className="grid gap-3">
                         <Label htmlFor="nfs-password-1">Password</Label>
                         <Input id="nfs-password-1" name="nfsPassword" type="password" />
+                      </div>          
+                    )}
+                    {datastoreType === "nfs" && (
+                      <div className="grid gap-3">
+                        <Label htmlFor="nfs-path-1">Path</Label>
+                        <Input id="nfs-path-1" name="path" defaultValue="" />
                       </div>          
                     )}
                   </div>

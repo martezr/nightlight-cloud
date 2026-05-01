@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Nightlight
+Description=Enterprise Boot Splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/nightlight
+ScriptFile=/usr/share/plymouth/themes/nightlight/nightlight.script

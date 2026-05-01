@@ -17,7 +17,15 @@ import {
 import * as React from "react"
 import { useState } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
-
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer"
 import {
   Card,
   CardContent,
@@ -31,6 +39,9 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { Button } from "./components/ui/button"
+import { SquareTerminal } from "lucide-react"
+import TerminalComponent from "./components/terminal"
 
 export const description = "An interactive bar chart"
 
@@ -244,6 +255,30 @@ React.useEffect(() => {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+
+        <Drawer>
+          <DrawerTrigger className="ml-auto">
+            <Button size="lg" aria-label="Submit">
+              <SquareTerminal />
+              <span className="ml-2">Launch Cloud Shell</span>
+            </Button>
+          </DrawerTrigger>
+          <DrawerContent>
+            <DrawerHeader>
+              <DrawerTitle>Nightlight Cloud Shell</DrawerTitle>
+                    <DrawerClose>
+                <Button variant="outline">Close</Button>
+              </DrawerClose>
+            </DrawerHeader>
+            <div className="flex-1 overflow-y-auto px-4 pb-4">
+                        <TerminalComponent /> 
+
+            </div>
+            <DrawerFooter>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+
         </header>
         <div className="flex flex-1 flex-col gap-4 p-8">
           <div className="grid auto-rows-min gap-4 md:grid-cols-4">

@@ -18,6 +18,7 @@ import { DataTable } from "./InstancesDataTable"
 import { useEffect, useState } from "react"
 import { Button } from "./components/ui/button"
 import { Link } from 'react-router-dom'
+import { RefreshCw } from "lucide-react"
 
 async function getData(): Promise<Instance[]> {
   // Fetch data from your API here.
@@ -60,7 +61,10 @@ export default function Page() {
         <div className="flex flex-1 flex-col gap-4 p-8">
           <div className="flex items-center justify-between space-y-2">
             <h2 className="text-3xl font-bold tracking-tight">Instances</h2>
-                      <div className="flex items-center gap-2">
+              <div className="flex items-center justify-center gap-2">
+                <Button onClick={() => window.location.reload()}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
               <Link to="/createinstance">
                 <Button
                   type="button"

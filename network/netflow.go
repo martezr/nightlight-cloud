@@ -14,7 +14,7 @@ var (
 	TableL2Rewrite = 10
 )
 
-func InstallDefaultFlows(bridge string) error {
+func InstallDefaultFlows(bridge string, metadataOfPort int) error {
 	ovsClient := ovs.New()
 
 	err := ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
@@ -38,11 +38,28 @@ func InstallDefaultFlows(bridge string) error {
 		return err
 	}
 
+	// Map mac address to ofPort
+	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
+		Priority: 100,
+		Matches: []ovs.Match{
+			ovs.DataLinkDestination("32:6b:ce:89:41:42"),
+		},
+		Table: TableL2Rewrite,
+		Actions: []ovs.Action{
+			ovs.Output(metadataOfPort),
+		},
+	})
+
+	if err != nil {
+		fmt.Println("Error adding flow:", err)
+		return err
+	}
+
 	return nil
 }
 
-func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) error {
-	fmt.Println("Adding VM flows for MAC:", vmMac, "on ofPort:", ofPort, "metadataOfPort:", metadataOfPort)
+func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int, dhcpOfPort int) error {
+	fmt.Println("Adding VM flows for MAC:", vmMac, "on ofPort:", ofPort, "metadataOfPort:", metadataOfPort, "dhcpOfPort:", dhcpOfPort)
 	ovsClient := ovs.New()
 
 	// convert ofPort to two ip address octets
@@ -61,34 +78,28 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 	}
 
 	// DHCP responder
-	/*	err := ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
-			Cookie:   0x1,
-			Priority: 100,
-			Protocol: ovs.ProtocolUDP,
-			InPort:   ofPort,
-			Matches: []ovs.Match{
-				ovs.UDPDestinationPort(67),
-				ovs.DataLinkSource(vmMac),
-			},
-			Table: 0,
-			Actions: []ovs.Action{
-				ovs.Move("OXM_OF_ETH_SRC[]", "OXM_OF_ETH_DST[]"),
-				ovs.SetField(metadataMacAddress, "eth_src"),
-				ovs.Move("OXM_OF_IP_SRC[]", "OXM_OF_IP_DST[]"),
-				ovs.SetField(metadataIpAddress, "ip_src"),
-				ovs.SetField(67, "udp_src"),
-				ovs.SetField(68, "udp_dst"),
-				ovs.InPort(),
-			},
-		})
-		if err != nil {
-			return err
-		}
-	*/
-	// VM to Metadata ARP responder
 	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
 		Cookie:   uint64(ofPort),
 		Priority: 100,
+		Protocol: ovs.ProtocolUDPv4,
+		InPort:   ofPort,
+		Matches: []ovs.Match{
+			ovs.UDPDestinationPort(67),
+			ovs.DataLinkSource(vmMac),
+		},
+		Table: 0,
+		Actions: []ovs.Action{
+			ovs.Output(dhcpOfPort),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	// VM to Metadata ARP responder
+	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
+		Cookie:   uint64(ofPort),
+		Priority: 1500,
 		Protocol: ovs.ProtocolARP,
 		InPort:   ofPort,
 		Matches: []ovs.Match{
@@ -117,7 +128,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 	// Metadata to VM ARP responder
 	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
 		Cookie:   uint64(ofPort),
-		Priority: 110,
+		Priority: 1500,
 		Protocol: ovs.ProtocolARP,
 		InPort:   metadataOfPort,
 		Matches: []ovs.Match{
@@ -149,7 +160,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 	// Nat VM metadata requests
 	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
 		Cookie:   uint64(ofPort),
-		Priority: 120,
+		Priority: 1000,
 		Protocol: ovs.ProtocolTCPv4,
 		InPort:   ofPort,
 		Matches: []ovs.Match{
@@ -172,7 +183,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 	// Nat Metadata responses to VM
 	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
 		Cookie:   uint64(ofPort),
-		Priority: 130,
+		Priority: 1000,
 		Protocol: ovs.ProtocolTCPv4,
 		InPort:   metadataOfPort,
 		Matches: []ovs.Match{
@@ -182,10 +193,10 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 			ovs.DataLinkDestination(vmMac),
 			ovs.TransportSourcePort(80),
 		},
-		Table: TableL2Rewrite,
+		Table: 0,
 		Actions: []ovs.Action{
 			ovs.SetField("0x1", "metadata"),
-			ovs.ConnectionTracking(fmt.Sprintf("table=%d,zone=%d,nat", TableL2Rewrite, ofPort)),
+			ovs.ConnectionTracking(fmt.Sprintf("table=%d,zone=%d,nat", 0, ofPort)),
 		},
 	})
 
@@ -196,7 +207,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 
 	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
 		Cookie:   uint64(ofPort),
-		Priority: 0,
+		Priority: 750,
 		InPort:   metadataOfPort,
 		Matches: []ovs.Match{
 			ovs.Metadata(1),
@@ -208,7 +219,7 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 				ovs.SetState(ovs.CTStateTracked),
 			),
 		},
-		Table: TableL2Rewrite,
+		Table: 0,
 		Actions: []ovs.Action{
 			ovs.Output(ofPort),
 		},
@@ -218,6 +229,25 @@ func AddVMFlows(bridge string, vmMac string, ofPort int, metadataOfPort int) err
 		fmt.Println("Error adding flow:", err)
 		return err
 	}
+
+	// Map mac address to ofPort
+	err = ovsClient.OpenFlow.AddFlow(bridge, &ovs.Flow{
+		Cookie:   uint64(ofPort),
+		Priority: 200,
+		Matches: []ovs.Match{
+			ovs.DataLinkDestination(vmMac),
+		},
+		Table: 0,
+		Actions: []ovs.Action{
+			ovs.Output(ofPort),
+		},
+	})
+
+	if err != nil {
+		fmt.Println("Error adding flow:", err)
+		return err
+	}
+
 	return nil
 }
 

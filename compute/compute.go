@@ -65,15 +65,16 @@ func copyFile(src, dest string) {
 	}
 }
 
-func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.Instance) {
+func CreateVM(instanceDef utils.Instance, instancePath string) (utils.Instance, error) {
 	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 10*time.Second)
 	if err != nil {
-		log.Fatalf("failed to dial libvirt: %v", err)
+		return utils.Instance{}, fmt.Errorf("failed to dial libvirt: %v", err)
 	}
 
 	l := libvirt.New(c)
 	if err := l.Connect(); err != nil {
-		log.Fatalf("failed to connect: %v", err)
+		c.Close()
+		return utils.Instance{}, fmt.Errorf("failed to connect to libvirt: %v", err)
 	}
 
 	vmUUID := generateInstanceUUID()
@@ -285,8 +286,8 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 		if nic.Model == "virtio" {
 			romFile := "/etc/virtio-net.rom"
 			netIface.ROM = &libvirtxml.DomainROM{
-				File:    &romFile,
-				Enabled: "on",
+				File: &romFile,
+				Bar:  "off",
 			}
 		}
 
@@ -312,10 +313,18 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 			fmt.Errorf("unsupported bus type: %s", disk.BusType)
 			continue
 		}
-		diskPath := fmt.Sprintf("%s/%s_disk_%s.qcow2", instancePath, instanceDef.ID, diskTarget)
+		//diskPath := fmt.Sprintf("%s/%s_disk_%s.qcow2", instancePath, instanceDef.ID, diskTarget)
 		if disk.ExistingPath != "" {
-			// Copy existing disk image
-			copyFile(disk.ExistingPath, diskPath)
+			fmt.Println("Using existing disk image:", disk.ExistingPath)
+			// Check if the existing path is a qcow2 file
+			if !strings.HasSuffix(disk.ExistingPath, ".qcow2") {
+				fmt.Println("Found non-qcow2 disk image, converting...")
+				ConvertDiskImage(disk.ExistingPath, disk.Path, disk.SizeGB)
+			} else {
+				fmt.Println("Found qcow2 disk image, copying...")
+				// Copy existing disk image
+				copyFile(disk.ExistingPath, disk.Path)
+			}
 		}
 
 		storageDisk := libvirtxml.DomainDisk{
@@ -420,9 +429,101 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (outputDef utils.
 	}
 
 	if err := l.Disconnect(); err != nil {
-		log.Fatalf("failed to disconnect: %v", err)
+		fmt.Printf("warning: failed to disconnect from libvirt: %v\n", err)
 	}
-	return instanceDef
+
+	return instanceDef, nil
+}
+
+func RegisterInstance(instance utils.Instance) {
+	// Implementation for registering an instance
+	instancePath := fmt.Sprintf("/opt/nightlight/volumes/%s", instance.DatastoreId)
+	instanceXMLPath := fmt.Sprintf("%s/%s.xml", instancePath, instance.ID)
+	if _, err := os.Stat(instanceXMLPath); os.IsNotExist(err) {
+		fmt.Printf("Instance XML file does not exist at path: %s\n", instanceXMLPath)
+		return
+	}
+
+	xmlData, err := os.ReadFile(instanceXMLPath)
+	if err != nil {
+		fmt.Printf("Error reading instance XML file: %v\n", err)
+		return
+	}
+
+	var domainDef libvirtxml.Domain
+	err = xml.Unmarshal(xmlData, &domainDef)
+	if err != nil {
+		fmt.Printf("Error unmarshalling instance XML: %v\n", err)
+		return
+	}
+	libvirtDomainDef, err := domainDef.Marshal()
+	if err != nil {
+		fmt.Printf("Error marshalling domain definition: %v\n", err)
+		return
+	}
+
+	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 10*time.Second)
+	if err != nil {
+		log.Fatalf("failed to dial libvirt: %v", err)
+	}
+
+	l := libvirt.New(c)
+	if err := l.Connect(); err != nil {
+		log.Fatalf("failed to connect: %v", err)
+	}
+	defer l.Disconnect()
+
+	domain, err := l.DomainDefineXML(libvirtDomainDef)
+	if err != nil {
+		fmt.Printf("Error defining domain in libvirt: %v\n", err)
+		return
+	}
+
+	err = l.DomainCreate(domain)
+	if err != nil {
+		fmt.Printf("Error starting domain in libvirt: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Instance %s registered and started successfully.\n", instance.ID)
+}
+
+func GetVNCPort(vmId string) (int, error) {
+	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 10*time.Second)
+	if err != nil {
+		return 0, fmt.Errorf("failed to dial libvirt: %v", err)
+	}
+	defer c.Close()
+
+	l := libvirt.New(c)
+	if err := l.Connect(); err != nil {
+		return 0, fmt.Errorf("failed to connect: %v", err)
+	}
+	defer l.Disconnect()
+
+	dom, err := l.DomainLookupByName(vmId)
+	if err != nil {
+		return 0, fmt.Errorf("failed to lookup domain: %v", err)
+	}
+
+	xmlDesc, err := l.DomainGetXMLDesc(dom, 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get domain XML: %v", err)
+	}
+
+	var domain libvirtxml.Domain
+	if err := xml.Unmarshal([]byte(xmlDesc), &domain); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal domain XML: %v", err)
+	}
+
+	for _, g := range domain.Devices.Graphics {
+		if g.VNC != nil && g.VNC.Port != -1 {
+			fmt.Println("VNC port found:", g.VNC.Port)
+			return g.VNC.Port, nil
+		}
+	}
+
+	return 0, fmt.Errorf("VNC port not found for domain %s", vmId)
 }
 
 func DeleteVM(vmId string, datastorePath string) {
@@ -539,10 +640,28 @@ func StartVM(vmId string) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	var rebootFlags libvirt.DomainRebootFlagValues
-	destroyErr := l.DomainReboot(dom, rebootFlags)
+
+	if err := l.DomainCreate(dom); err != nil {
+		panic(err)
+	}
+}
+
+func StopVM(vmId string) {
+	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 10*time.Second)
 	if err != nil {
-		fmt.Println(destroyErr)
+		log.Fatalf("failed to dial libvirt: %v", err)
+	}
+
+	l := libvirt.New(c)
+	if err := l.Connect(); err != nil {
+		log.Fatalf("failed to connect: %v", err)
+	}
+	dom, err := l.DomainLookupByName(vmId)
+	if err != nil {
+		fmt.Println(err)
+	}
+	if err := l.DomainDestroy(dom); err != nil {
+		panic(err)
 	}
 }
 
@@ -561,7 +680,7 @@ func AttachCDROM(vmId string, filePath string) {
 		fmt.Println(err)
 	}
 	attachErr := l.DomainAttachDevice(dom, "")
-	if err != nil {
+	if attachErr != nil {
 		fmt.Println(attachErr)
 	}
 }
@@ -601,7 +720,7 @@ func SendConsoleKeyEvent(vmId string, keycodes []uint32) {
 	//keycodes := []uint32{keycode}
 
 	sendErr := l.DomainSendKey(dom, uint32(libvirt.KeycodeSetUsb), 150, keycodes, 0)
-	if err != nil {
+	if sendErr != nil {
 		fmt.Println(sendErr)
 	}
 }
@@ -663,5 +782,25 @@ func CreateDiskImage(imagePath string, sizeGB int) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+func ConvertDiskImage(srcPath string, destPath string, sizeGB int) error {
+	cmd := fmt.Sprintf("qemu-img convert -f qcow2 -O qcow2 %s %s", srcPath, destPath)
+	runcmd := strings.Split(cmd, " ")
+	out := exec.Command(runcmd[0], runcmd[1:]...)
+	err := out.Run()
+	if err != nil {
+		return err
+	}
+
+	resizecmd := fmt.Sprintf("qemu-img resize -f qcow2 %s %dG", destPath, sizeGB)
+	runcmd = strings.Split(resizecmd, " ")
+	out = exec.Command(runcmd[0], runcmd[1:]...)
+	err = out.Run()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

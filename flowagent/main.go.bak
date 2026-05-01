@@ -1,0 +1,99 @@
+package main
+
+import (
+	"bytes"
+	"encoding/binary"
+	"encoding/json"
+	"log"
+	"net"
+	"os"
+
+	"github.com/cilium/ebpf"
+	"github.com/cilium/ebpf/link"
+	"github.com/cilium/ebpf/ringbuf"
+)
+
+type FlowEvent struct {
+	SrcIP   uint32
+	DstIP   uint32
+	SrcPort uint16
+	DstPort uint16
+	Proto   uint8
+	Bytes   uint32
+}
+
+func main() {
+	spec, err := ebpf.LoadCollectionSpec("flow.o")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	coll, err := ebpf.NewCollection(spec)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer coll.Close()
+
+	prog := coll.Programs["flow_monitor"]
+	events := coll.Maps["events"]
+
+	ifaceName := "mirror0"
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Attach TC ingress
+	l, err := link.AttachTC(link.TCOptions{
+		Program:     prog,
+		Interface:   iface.Index,
+		AttachPoint: link.Ingress,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer l.Close()
+
+	rd, err := ringbuf.NewReader(events)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rd.Close()
+
+	log.Println("TC eBPF flow monitor started on", ifaceName)
+
+	for {
+		record, err := rd.Read()
+		if err != nil {
+			continue
+		}
+
+		var evt FlowEvent
+		if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &evt); err != nil {
+			continue
+		}
+
+		logJSON(evt)
+	}
+}
+
+func ipToString(ip uint32) string {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, ip)
+	return net.IP(b).String()
+}
+
+func logJSON(evt FlowEvent) {
+	out := map[string]interface{}{
+		"src_ip":   ipToString(evt.SrcIP),
+		"dst_ip":   ipToString(evt.DstIP),
+		"src_port": evt.SrcPort,
+		"dst_port": evt.DstPort,
+		"protocol": evt.Proto,
+		"bytes":    evt.Bytes,
+	}
+
+	data, _ := json.Marshal(out)
+	os.Stdout.Write(data)
+	os.Stdout.Write([]byte("\n"))
+}

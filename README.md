@@ -2,8 +2,6 @@
 
 Nightlight cloud is a lightweight virtualization solution that is intended for homelab environments and lacks many of the standard enterprise grade virtualization features like clustering, live migration, and more. The goal is to enable rapid expirementation 
 
-
-
 ## Create Instance
 
 ```

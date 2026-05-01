@@ -53,7 +53,7 @@ func getSystemInfo() (out Host) {
 	payload.Memory = int64(n)
 
 	networkMap := output.Gohai.Network.(map[string]interface{})
-	fmt.Sprintf("network map: %v", networkMap)
+	fmt.Printf("network map: %v", networkMap)
 	payload.IPAddress = networkMap["ipaddress"].(string)
 	payload.MacAddress = networkMap["macaddress"].(string)
 

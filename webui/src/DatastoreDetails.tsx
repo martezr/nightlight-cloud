@@ -14,16 +14,11 @@ import {
 } from "@/components/ui/sidebar"
 import { useParams } from 'react-router-dom'
 import { useEffect, useState } from "react"
+import { DataTable } from "./DatastoreDetailsDataTable"
+import { columns, type DatastoreFile } from "./DatastoreDetailsColumns"
 
-
-interface IntegrationDetails {
-    id: string
-    name: string
-    // Add other fields as needed
-}
-
-function useIntegrationDetails(id?: string) {
-    const [data, setData] = useState<IntegrationDetails | null>(null)
+function useDatastoreDetails(id?: string) {
+    const [data, setData] = useState<DatastoreFile[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
 
@@ -31,9 +26,9 @@ function useIntegrationDetails(id?: string) {
         if (!id) return
         setLoading(true)
         setError(null)
-        fetch(`/api/v1/integrations/${id}`)
+        fetch(`/api/v1/datastores/${id}/files`)
             .then((res) => {
-                if (!res.ok) throw new Error("Failed to fetch integration details")
+                if (!res.ok) throw new Error("Failed to fetch datastore details")
                 return res.json()
             })
             .then(setData)
@@ -46,7 +41,7 @@ function useIntegrationDetails(id?: string) {
 
 export default function Page() {
 const { id } = useParams();
-const { data, loading, error } = useIntegrationDetails(id);
+const { data, loading, error } = useDatastoreDetails(id);
 if (error) {
     return <div>Error: {error}</div>
 }
@@ -64,14 +59,14 @@ if (error) {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href="/integrations" className="font-bold">
-                    Integrations
+                  <BreadcrumbLink href="/datastores" className="font-bold">
+                    Datastores
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                  <BreadcrumbSeparator />
                 <BreadcrumbItem className="hidden md:block">
-                    <BreadcrumbLink href={`/integrations/${id}`} className="font-bold">
-                      {data ? data.name : loading ? "Loading..." : "Error"}
+                    <BreadcrumbLink href={`/datastores/${id}`} className="font-bold">
+                      {data ? `${id}` : loading ? "Loading..." : "Error"}
                     </BreadcrumbLink>
                 </BreadcrumbItem>
               </BreadcrumbList>
@@ -79,12 +74,9 @@ if (error) {
           </div>
         </header>
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div className="bg-muted/50 aspect-video rounded-xl" />
-            <div className="bg-muted/50 aspect-video rounded-xl" />
-            <div className="bg-muted/50 aspect-video rounded-xl" />
-          </div>
-          <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
+          {/* <h2 className="text-3xl font-bold tracking-tight">Datastore Details: {id}</h2>
+          <h2 className="text-2xl font-bold tracking-tight">Files</h2> */}
+            <DataTable columns={columns} data={data ?? []} />
         </div>
       </SidebarInset>
     </SidebarProvider>

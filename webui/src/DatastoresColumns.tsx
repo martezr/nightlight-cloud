@@ -23,16 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Sheet,
-  SheetClose,
-  SheetDescription,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
-//import { Input } from "@/components/ui/input"
+import { Link } from "react-router-dom"
 
 // This type is used to define the shape of our data.
 // You can use a Zod schema here if you want.
@@ -72,7 +63,14 @@ export const columns: ColumnDef<Datastore>[] = [
     accessorKey: "id",
     header: "ID",
     cell: ({ row }) => (
-      <div >{row.getValue("id")}</div>
+      <div>
+        <Link
+          to={`/datastores/${row.getValue("id")}`}
+          className="hover:underline"
+        >
+          {row.getValue("id")}
+        </Link>
+      </div>
     ),
   },
   {
@@ -89,28 +87,7 @@ export const columns: ColumnDef<Datastore>[] = [
       )
     },
     cell: ({ row }) => (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="link" className="p-0 m-0 h-auto">
-          {row.getValue("name")}
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="w-[800px] sm:w-[980px]">
-        <SheetHeader>
-          <SheetTitle>Integration Details</SheetTitle>
-          <SheetDescription>
-            Make changes to your integration details here. Click save when you&apos;re done.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="grid flex-1 auto-rows-min gap-6 px-4">
-        </div>
-        <SheetFooter>
-          <SheetClose asChild>
-            <Button variant="outline">Close</Button>
-          </SheetClose>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+      <div >{row.getValue("name")}</div>
     ),
   },
   {
@@ -125,13 +102,6 @@ export const columns: ColumnDef<Datastore>[] = [
     header: "Type",
     cell: ({ row }) => (
       <div >{row.getValue("type")}</div>
-    ),
-  },
-  {
-    accessorKey: "path",
-    header: "Path",
-    cell: ({ row }) => (
-      <div >{row.getValue("path")}</div>
     ),
   },
   {

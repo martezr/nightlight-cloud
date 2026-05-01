@@ -3,6 +3,7 @@
 import DatastoreDetails from './DatastoreDetails.tsx';
 import Datastores from './Datastores.tsx';
 import Home from './Home.tsx'; // Example component
+import InstanceConsole from './InstanceConsole.tsx';
 import InstanceDetails from './InstanceDetails.tsx';
 import Instances from './Instances.tsx';
 import Login from './Login.tsx';
@@ -22,6 +23,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/instances" element={<Instances />} />
         <Route path="/instances/:id" element={<InstanceDetails />} />
+        <Route path="/instances/:id/console" element={<InstanceConsole />} />
         <Route path="/createinstance" element={<NewInstance />} />
         <Route path="/datastores" element={<Datastores />} />
         <Route path="/datastores/:id" element={<DatastoreDetails />} />

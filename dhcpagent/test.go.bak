@@ -1,0 +1,89 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"os"
+
+	"github.com/insomniacslk/dhcp/dhcpv4"
+)
+
+func handler1(conn net.PacketConn, peer net.Addr, m *dhcpv4.DHCPv4) {
+	f, err := os.OpenFile("/var/log/dhcplogs.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Failed to open log file: %v", err)
+	} else {
+		mw := io.MultiWriter(os.Stdout, f)
+		log.SetOutput(mw)
+		defer f.Close()
+	}
+
+	log.Println("Received DHCP message type:", m.MessageType())
+	switch m.MessageType() {
+	case dhcpv4.MessageTypeDiscover:
+		// Add logic to check with the dhcp backend to see if the source mac is valid
+		vmMac := m.ClientHWAddr.String()
+
+		offer, err := dhcpv4.NewReplyFromRequest(m)
+		if err != nil {
+			log.Println("Error creating DHCP offer:", err)
+			return
+		}
+		offer.YourIPAddr = currentIP
+		offer.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeOffer))
+		offer.UpdateOption(dhcpv4.OptSubnetMask(net.IPMask(subnetMask)))
+		offer.UpdateOption(dhcpv4.OptRouter(router))
+		offer.UpdateOption(dhcpv4.OptIPAddressLeaseTime(leaseDuration))
+		_, ip, _ := net.ParseCIDR("169.254.0.0/16")
+		test := &dhcpv4.Route{
+			Dest:   ip,
+			Router: net.IP{0, 0, 0, 0},
+		}
+		opt1 := dhcpv4.OptClasslessStaticRoute(test)
+		offer.UpdateOption(opt1)
+		log.Println("Sending DHCP offer for IP:", currentIP)
+		log.Println("DHCP Offer Options:", offer.Options)
+		fmt.Println("DHCP Offer Options:", offer.Options)
+		_, err = conn.WriteTo(offer.ToBytes(), peer)
+		if err != nil {
+			log.Println("Error sending DHCP offer:", err)
+		}
+	// Handle DHCP Request
+	case dhcpv4.MessageTypeRequest:
+		ack, err := dhcpv4.NewReplyFromRequest(m)
+		if err != nil {
+			return
+		}
+		ack.YourIPAddr = currentIP
+		ack.UpdateOption(dhcpv4.OptMessageType(dhcpv4.MessageTypeAck))
+		ack.UpdateOption(dhcpv4.OptSubnetMask(net.IPMask(subnetMask)))
+		ack.UpdateOption(dhcpv4.OptRouter(router))
+		ack.UpdateOption(dhcpv4.OptIPAddressLeaseTime(leaseDuration))
+		// Add static routes (option 121)
+		var routes []byte
+		for _, r := range staticRoutes {
+			routes = append(routes, 8) // 8 bits mask for 10.0.0.0/8
+			routes = append(routes, r.Dest[0])
+			routes = append(routes, r.Gateway...)
+		}
+		//ack.UpdateOption(dhcpv4.Option{Code: 121, Value: dhcpv4.OptionGeneric(routes)})
+		// Move to next IP for next client
+		currentIP = nextIP(currentIP)
+		if !ipInRange(currentIP, ipPoolStart, ipPoolEnd) {
+			currentIP = ipPoolStart
+		}
+		log.Println("Sending DHCP ack for IP:", ack.YourIPAddr)
+		_, err = conn.WriteTo(ack.ToBytes(), peer)
+		if err != nil {
+			log.Println("Error sending DHCP ack:", err)
+		}
+	default:
+		log.Println("Unhandled DHCP message type:", m.MessageType())
+	}
+}
+
+func test() {
+
+}

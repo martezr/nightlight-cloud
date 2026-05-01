@@ -8,15 +8,14 @@ require (
 	github.com/digitalocean/go-libvirt v0.0.0-20240513153900-2d13115a1625
 	github.com/evangwt/go-vncproxy v1.1.0
 	github.com/go-chi/chi v1.5.5
+	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.2.0
+	github.com/gorilla/websocket v1.5.3
 	github.com/hashicorp/go-getter/v2 v2.2.3
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
-	github.com/lorenzosaino/go-sysctl v0.3.1
 	github.com/martezr/go-openvswitch v0.0.0-20250815183327-516c744b7db8
 	github.com/ovn-org/libovsdb v0.6.0
-	github.com/vishvananda/netlink v1.3.1
-	github.com/vishvananda/netns v0.0.5
 	go.etcd.io/bbolt v1.3.10
 	libvirt.org/go/libvirtxml v1.10003.0
 )
@@ -30,7 +29,6 @@ require (
 //replace github.com/martezr/go-openvswitch => ../go-openvswitch
 
 require (
-	github.com/BurntSushi/toml v1.1.0 // indirect
 	github.com/DataDog/datadog-agent/pkg/util/log v0.52.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.52.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
@@ -67,18 +65,14 @@ require (
 	github.com/ulikunitz/xz v0.5.8 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/crypto v0.43.0 // indirect
-	golang.org/x/exp/typeparams v0.0.0-20220613132600-b0d781184e0d // indirect
-	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
+	golang.org/x/crypto v0.43.0
 	golang.org/x/mobile v0.0.0-20251021151156-188f512ec823
-	golang.org/x/mod v0.29.0 // indirect
-	golang.org/x/net v0.46.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/net v0.46.0
 	golang.org/x/sys v0.37.0 // indirect
-	golang.org/x/tools v0.38.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	honnef.co/go/tools v0.3.2 // indirect
 )
+
+replace github.com/martezr/openvswitch => ../go-openvswitch

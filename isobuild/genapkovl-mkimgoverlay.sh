@@ -33,6 +33,10 @@ $HOSTNAME
 EOF
 
 cp /aports/scripts/nightlight-cloud "$tmp"/etc/nightlight-cloud
+cp /aports/scripts/metadataagent "$tmp"/etc/metadataagent
+cp /aports/scripts/dhcpagent "$tmp"/etc/dhcpagent
+cp /aports/scripts/flowmonitoragent "$tmp"/etc/flowmonitoragent
+cp /aports/scripts/nightlight-config "$tmp"/etc/nightlight-config
 cp /aports/scripts/OVMF_CODE.secboot.fd "$tmp"/etc/OVMF_CODE.secboot.fd
 cp /aports/scripts/OVMF_VARS.secboot.fd "$tmp"/etc/OVMF_VARS.secboot.fd
 cp /aports/scripts/OVMF_CODE_4M.ms.fd "$tmp"/etc/OVMF_CODE_4M.ms.fd
@@ -40,6 +44,10 @@ cp /aports/scripts/OVMF_VARS_4M.ms.fd "$tmp"/etc/OVMF_VARS_4M.ms.fd
 cp /aports/scripts/virtio-net.rom "$tmp"/etc/virtio-net.rom
 
 chmod 755 "$tmp"/etc/nightlight-cloud
+chmod 755 "$tmp"/etc/metadataagent
+chmod 755 "$tmp"/etc/dhcpagent
+chmod 755 "$tmp"/etc/flowmonitoragent
+chmod 755 "$tmp"/etc/nightlight-config
 
 # create a service file for nightlight-cloud
 mkdir -p "$tmp"/etc/init.d
@@ -47,10 +55,67 @@ makefile root:root 0755 "$tmp"/etc/init.d/nightlight-cloud <<'EOF'
 #!/sbin/openrc-run
 
 command="/etc/nightlight-cloud"
-#command_args="&"
+command_args="&"
 pidfile="/var/run/nightlight-cloud.pid"
 name="nightlight-cloud"
-description="RMS Router Service"
+description="Nightlight Cloud Service"
+depend() {
+	after nightlight-config
+}
+EOF
+
+makefile root:root 0755 "$tmp"/etc/init.d/nightlight-config <<'EOF'	
+#!/sbin/openrc-run
+
+command="/etc/nightlight-config"
+command_args="&"
+pidfile="/var/run/nightlight-config.pid"
+name="nightlight-config"
+description="Nightlight Config Service"
+depend() {
+	after net
+}
+EOF
+
+makefile root:root 0755 "$tmp"/etc/init.d/metadataagent <<'EOF'	
+#!/sbin/openrc-run
+#/etc/init.d/metadataagent
+name="metadataagent"
+command="/sbin/ip"
+command_args="netns exec mddefaultvpc /etc/metadataagent"
+command_user="root"
+pidfile="/var/run/metadataagent.pid"
+command_background="yes"
+depend() {
+	after net
+}
+EOF
+
+## Setup DHCP service
+makefile root:root 0755 "$tmp"/etc/init.d/dhcpagent <<'EOF'	
+#!/sbin/openrc-run
+#/etc/init.d/dhcpagent
+name="dhcpagent"
+command="/sbin/ip"
+command_args="netns exec dhdefaultvpc /etc/dhcpagent"
+command_user="root"
+pidfile="/var/run/dhcpagent.pid"
+command_background="yes"
+depend() {
+	after net
+}
+EOF
+
+## Setup Flow Monitor service
+makefile root:root 0755 "$tmp"/etc/init.d/flowmonitoragent <<'EOF'	
+#!/sbin/openrc-run
+#/etc/init.d/flowmonitoragent
+name="flowmonitoragent"
+command="/sbin/ip"
+command_args="netns exec fmdefaultvpc /etc/flowmonitoragent"
+command_user="root"
+pidfile="/var/run/flowmonitoragent.pid"
+command_background="yes"
 depend() {
 	after net
 }
@@ -109,7 +174,8 @@ rc_add bootmisc boot
 rc_add syslog boot
 rc_add sshd boot
 rc_add libvirtd boot
-#rc_add nightlight-cloud boot
+rc_add nightlight-config boot
+rc_add nightlight-cloud boot
 #rc_add iptables boot
 
 # Open vSwitch services

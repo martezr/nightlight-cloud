@@ -1,0 +1,384 @@
+import { AppSidebar } from "@/components/app-sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+import { useState } from "react"
+import { Field, FieldDescription, FieldLabel } from "./components/ui/field"
+import { Input } from "./components/ui/input"
+import { useEffect } from "react"
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "./components/ui/sheet"
+import { Button } from "./components/ui/button"
+import { Label } from "./components/ui/label"
+import { Switch } from "@/components/ui/switch"
+
+type Datastore = {
+    id: string
+    name: string
+}
+
+function useDatastores() {
+    const [datastores, setDatastores] = useState<Datastore[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        setLoading(true)
+        fetch("/api/v1/datastores")
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch datastores")
+                return res.json()
+            })
+            .then((data) => setDatastores(data))
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false))
+    }, [])
+
+    return { datastores, loading, error }
+}
+
+
+type VPC = {
+    id: string
+    name: string
+}
+
+
+function useVPCs() {
+    const [vpcs, setVPCs] = useState<VPC[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        setLoading(true)
+        fetch("/api/v1/vpcs")
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch vpcs")
+                return res.json()
+            })
+            .then((data) => setVPCs(data))
+            .catch((err) => setError(err.message))
+            .finally(() => setLoading(false))
+    }, [])
+
+    return { vpcs, loading, error }
+}
+
+export default function Page() {
+
+    const [enabled, setEnabled] = useState(true)
+    const { datastores, loading, error } = useDatastores()
+    const { vpcs, loading: vpcsLoading, error: vpcsError } = useVPCs()
+    const [name, setName] = useState("")
+    const [description, setDescription] = useState("")
+    const [cpuCores, setCpuCores] = useState("")
+    const [cpuSockets, setCpuSockets] = useState("")
+    const [memory, setMemory] = useState("")
+    const [datastoreId, setDatastoreId] = useState<string | undefined>()
+    const [vpcId, setVpcId] = useState<string | undefined>()
+    const [submitting, setSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState<string | null>(null)
+    const [model, setModel] = useState("")
+    // Removed unused submitSuccess state
+    const [networkInterfaces, setNetworkInterfaces] = useState<Array<{ bootOrder: number, connected: boolean, bridgeName: string, model: string }>>([])
+    const handleAddNetworkInterface = (e: React.FormEvent) => {
+        const formData = new FormData(e.currentTarget as HTMLFormElement)
+        const connected = formData.get("switch-connected") === "on"
+        //const bootOrder = formData.get("sheet-demo-boot-order")
+        // You can extract other fields similarly if needed
+        setNetworkInterfaces([
+            ...networkInterfaces,
+            { bootOrder: networkInterfaces.length + 1, connected: connected, bridgeName: vpcId || "", model: model },
+        ])
+        console.log("Network Interfaces:", networkInterfaces)
+    } 
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSubmitting(true)
+        setSubmitError(null)
+        // Removed setSubmitSuccess(false)
+        try {
+            const res = await fetch("/api/v1/instances", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name,
+                    description,
+                    CPUCores: parseInt(cpuCores, 10),
+                    CPUSockets: parseInt(cpuSockets, 10),
+                    MemoryMB: parseInt(memory, 10),
+                    datastoreId: datastoreId,
+                    vpcId: vpcId,
+                    enabled,
+                }),
+            })
+            console.log("Response:", res)
+            if (!res.ok) throw new Error("Failed to create instance")
+            // Removed setSubmitSuccess(true)
+        } catch (err: any) {
+            setSubmitError(err.message)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+  return (
+    <SidebarProvider>
+      <AppSidebar collapsible="icon" variant="sidebar" />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Separator
+            orientation="vertical"
+            className="mr-2 data-[orientation=vertical]:h-4"
+          />
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem className="hidden md:block">
+                <BreadcrumbLink href="#" className="font-bold">
+                  New Instance
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-8">
+            <h2 className="text-3xl font-bold tracking-tight">Create New Instance</h2>
+        <div>
+            <form className="w-full max-w-md space-y-6" onSubmit={handleSubmit}>
+                <Field>
+                    <FieldLabel htmlFor="instance-name">Instance Name</FieldLabel>
+                    <Input
+                        id="instance-name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Enter instance name"
+                    />
+                    <FieldDescription>
+                        A unique name for your instance.
+                    </FieldDescription>
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="instance-description">Instance Description</FieldLabel>
+                    <Input
+                        id="instance-description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Enter instance description"
+                    />
+                    <FieldDescription>
+                        A brief description for your instance.
+                    </FieldDescription>
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="instance-cpu-cores">CPU Cores</FieldLabel>
+                    <Input
+                        id="instance-cpu-cores"
+                        value={cpuCores}
+                        onChange={(e) => setCpuCores(e.target.value)}
+                        placeholder="Enter number of CPU cores"
+                    />
+                    <FieldDescription>
+                        The number of CPU cores for your instance.
+                    </FieldDescription>
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="instance-cpu-sockets">CPU Sockets</FieldLabel>
+                    <Input
+                        id="instance-cpu-sockets"
+                        value={cpuSockets}
+                        onChange={(e) => setCpuSockets(e.target.value)}
+                        placeholder="Enter number of CPU sockets"
+                    />
+                    <FieldDescription>
+                        The number of CPU sockets for your instance.
+                    </FieldDescription>
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="instance-memory">Memory</FieldLabel>
+                    <Input
+                        id="instance-memory"
+                        value={memory}
+                        onChange={(e) => setMemory(e.target.value)}
+                        placeholder="Enter amount of memory"
+                    />
+                    <FieldDescription>
+                        The amount of memory for your instance.
+                    </FieldDescription>
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="instance-datastore">Select Datastore</FieldLabel>
+                    <Select
+                        value={datastoreId}
+                        onValueChange={setDatastoreId}
+                    >
+                        <SelectTrigger className="w-full rounded border border-gray-300 px-3 py-2" id="instance-datastore">
+                            <SelectValue placeholder="Select a datastore" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {!loading && !error && datastores.map((ds) => (
+                                <SelectItem key={ds.id} value={ds.id}>
+                                    {ds.name} ({ds.id})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                        Choose a datastore for this instance.
+                    </FieldDescription>
+                </Field>
+                <Field>
+                    <FieldLabel htmlFor="instance-vpc">Select VPC</FieldLabel>
+                    <Select
+                        value={vpcId}
+                        onValueChange={setVpcId}
+                    >
+                        <SelectTrigger className="w-full rounded border border-gray-300 px-3 py-2" id="instance-vpc">
+                            <SelectValue placeholder="Select a VPC" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {!vpcsLoading && !vpcsError && vpcs.map((vpc) => (
+                                <SelectItem key={vpc.id} value={vpc.id}>
+                                    {vpc.name} ({vpc.id})
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <FieldDescription>
+                        Choose a VPC for this instance.
+                    </FieldDescription>
+                </Field>
+                <Sheet>
+                <SheetTrigger>
+                    <Button >+ Add Network Interface</Button>
+                </SheetTrigger>
+                    <SheetContent className="w-[400px] sm:w-[540px] xl:w-[700px] sm:max-w-none xl:max-w-none">
+                    <SheetHeader>
+                    <SheetTitle>Network Interface</SheetTitle>
+                    <SheetDescription>This action cannot be undone.</SheetDescription>
+                    </SheetHeader>
+                        <div className="grid flex-1 auto-rows-min gap-6 px-4">
+
+                    <form className="w-full max-w-md space-y-6" onSubmit={handleAddNetworkInterface}>
+                        <div className="grid gap-3">
+                            <div className="flex items-center space-x-2">
+                            <Label htmlFor="switch-connected">Connected</Label>
+                            <Switch
+                                id="switch-connected"
+                                defaultChecked={true}
+                            />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-3">
+                            <Label htmlFor="sheet-demo-boot-order">Boot Order</Label>
+                            <Input
+                            id="sheet-demo-boot-order"
+                            type="number"
+                            defaultValue={networkInterfaces.length + 1}
+                            min={1}
+                            />
+                        </div>
+                            <div className="grid gap-3">
+                            <Label htmlFor="sheet-demo-bridge-name">Bridge Name (VPC)</Label>
+                            <Select value={vpcId} onValueChange={setVpcId}>
+                                <SelectTrigger className="w-full" id="sheet-demo-bridge-name">
+                                    <SelectValue placeholder={vpcsLoading ? "Loading VPCs..." : "Select a VPC"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {!vpcsLoading && !vpcsError && vpcs.map((v) => (
+                                        <SelectItem key={v.id} value={v.id}>
+                                            {v.name} ({v.id})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <FieldDescription>
+                                Choose a VPC for this network interface.
+                            </FieldDescription>
+                        </div> 
+                        <div className="grid gap-3">
+                            <Label htmlFor="sheet-demo-model">Model</Label>
+                            <Select value={model} onValueChange={setModel}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select a model" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="virtio">virtio</SelectItem>
+                                <SelectItem value="e1000">e1000</SelectItem>
+                                <SelectItem value="rtl8139">rtl8139</SelectItem>
+                            </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid gap-3">
+                            <Label htmlFor="sheet-demo-mac-address">MAC Address</Label>
+                            <Input id="sheet-demo-mac-address" defaultValue="" />
+                        </div>
+
+                        </form>
+                        </div>
+                        <div className="flex justify-end gap-2 px-4 pb-4">
+                        <Button variant="outline">Cancel</Button>
+                        <Button type="submit">Save</Button>
+                        </div>
+                </SheetContent>
+                </Sheet>
+                <Field>
+                    <div className="flex items-center space-x-2">
+                        <input
+                            id="instance-enabled"
+                            type="checkbox"
+                            checked={enabled}
+                            onChange={(e) => setEnabled(e.target.checked)}
+                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <FieldLabel htmlFor="instance-enabled">Enable Instance</FieldLabel>
+                    </div>
+                    <FieldDescription>
+                        Toggle to enable or disable the instance.
+                    </FieldDescription>
+                </Field>
+                <div className="pt-4">
+                    <button
+                        type="button"
+                        className="mr-2 rounded border border-gray-300 bg-white px-4 py-2 font-semibold text-gray-700 hover:bg-gray-100"
+                        onClick={() => window.location.href = "/instances"}
+                    >
+                        Back
+                    </button>
+                    <button
+                        type="submit"
+                        className="rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary/90"
+                        disabled={submitting}
+                    >
+                        {submitting ? "Creating..." : "Create Instance"}
+                    </button>
+                </div>
+                {submitError && (
+                    <div className="mt-2 text-sm text-red-600" role="alert">
+                        {submitError}
+                    </div>
+                )}
+            </form>
+        </div>
+          </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}

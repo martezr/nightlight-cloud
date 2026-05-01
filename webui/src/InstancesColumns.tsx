@@ -7,8 +7,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ArrowUpDown, MoreHorizontal } from "lucide-react"
@@ -25,15 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Sheet,
-  SheetClose,
-  SheetDescription,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet"
+import { Link } from "react-router-dom"
 //import { Input } from "@/components/ui/input"
 
 // This type is used to define the shape of our data.
@@ -45,6 +35,42 @@ export type Instance = {
   status: string
   version: string
   description: string
+  initializationStatus: string
+  cpuCores: string
+  cpuSockets: string
+  memoryMB: string
+  devices: InstanceDevices
+  primaryIPAddress: string
+  primaryMacAddress: string
+}
+
+export type InstanceDevices = {
+  networkInterfaces: InstanceNetworkInterface[]
+  cdroms: InstanceCDROM[]
+  disks: InstanceDisk[]
+}
+
+export type InstanceNetworkInterface = {
+  id: string
+  vpcId: string
+  macAddress: string
+  bridgeName: string
+  connected: boolean
+  bootOrder: number
+  model: string
+}
+
+export type InstanceCDROM = {
+  id: string
+  name: string
+  connected: boolean
+}
+
+export type InstanceDisk = {
+  id: string
+  sizeGB: number
+  busType: string
+  bootOrder: number
 }
 
 export const columns: ColumnDef<Instance>[] = [
@@ -74,7 +100,14 @@ export const columns: ColumnDef<Instance>[] = [
     accessorKey: "id",
     header: "ID",
     cell: ({ row }) => (
-      <div >{row.getValue("id")}</div>
+      <div>
+        <Link
+          to={`/instances/${row.getValue("id")}`}
+          className="hover:underline"
+        >
+          {row.getValue("id")}
+        </Link>
+      </div>
     ),
   },
   {
@@ -91,41 +124,20 @@ export const columns: ColumnDef<Instance>[] = [
       )
     },
     cell: ({ row }) => (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="link" className="p-0 m-0 h-auto">
-          {row.getValue("name")}
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="w-[800px] sm:w-[980px]">
-        <SheetHeader>
-          <SheetTitle>Instance Details</SheetTitle>
-          <SheetDescription>
-            Make changes to your integration details here. Click save when you&apos;re done.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="grid flex-1 auto-rows-min gap-6 px-4">
-        </div>
-        <SheetFooter>
-          <SheetClose asChild>
-            <Button variant="outline">Close</Button>
-          </SheetClose>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+      <div >{row.getValue("name")}</div>
     ),
   },
   {
-    accessorKey: "status",
+    accessorKey: "initializationStatus",
     header: "Status",
     cell: ({ row }) => (
       <Badge variant="outline" className="text-muted-foreground px-1.5">
-        {row.original.status === "connected" ? (
+        {row.original.initializationStatus === "connected" ? (
           <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
         ) : (
           <IconLoader />
         )}
-        {row.original.status}
+        initializing
       </Badge>
     ),
   },
@@ -137,17 +149,31 @@ export const columns: ColumnDef<Instance>[] = [
     ),
   },
   {
-    accessorKey: "cpu",
-    header: "CPU",
+    accessorKey: "cpuSockets",
+    header: "CPU Sockets",
     cell: ({ row }) => (
-      <div >{row.getValue("cpu")}</div>
+      <div >{row.getValue("cpuSockets")}</div>
     ),
   },
   {
-    accessorKey: "memory",
+    accessorKey: "cpuCores",
+    header: "CPU Cores",
+    cell: ({ row }) => (
+      <div >{row.getValue("cpuCores")}</div>
+    ),
+  },
+  {
+    accessorKey: "memoryMB",
     header: "Memory",
     cell: ({ row }) => (
-      <div >{row.getValue("memory")}</div>
+      <div >{row.getValue("memoryMB")}</div>
+    ),
+  },
+  {
+    accessorKey: "primaryIPAddress",
+    header: "IP Address",
+    cell: ({ row }) => (
+      <div >{row.getValue("primaryIPAddress")}</div>
     ),
   },
   {
@@ -155,7 +181,7 @@ export const columns: ColumnDef<Instance>[] = [
     header: "Actions",
     enableHiding: false,
     cell: ({ row }) => {
-      const integration = row.original
+      const instance = row.original
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -165,29 +191,27 @@ export const columns: ColumnDef<Instance>[] = [
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Actions</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Edit Integration</DropdownMenuItem>
+            <DropdownMenuItem>Edit Instance</DropdownMenuItem>
     <AlertDialog>
       <AlertDialogTrigger asChild>
             <DropdownMenuItem
               onClick={async (event) => {
                event.preventDefault();
-              await fetch(`/api/v1/integrations/${integration.id}`, {
+              await fetch(`/api/v1/instances/${instance.id}`, {
                 method: "DELETE",
               })
               window.location.reload()
               }}
               className="text-red-600"
             >
-              Delete Integration
+              Delete Instance
             </DropdownMenuItem>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
           <AlertDialogDescription>
-            This action cannot be undone. This will permanently delete the following integration: {integration.name}.
+            This action cannot be undone. This will permanently delete the following instance: {instance.name}.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

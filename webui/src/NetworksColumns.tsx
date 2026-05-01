@@ -69,7 +69,7 @@ export const columns: ColumnDef<Network>[] = [
           to={`/networks/${row.getValue("id")}`}
           className="hover:underline"
         >
-          {row.getValue("name")}
+          {row.getValue("id")}
         </Link>
       </div>
     ),

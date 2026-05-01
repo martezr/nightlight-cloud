@@ -17,11 +17,18 @@ RUN mkdir -pv ${TMPDIR}
 COPY genapkovl-mkimgoverlay.sh aports/scripts/genapkovl-mkimgoverlay.sh
 RUN chmod +x aports/scripts/genapkovl-mkimgoverlay.sh
 
+#COPY mkimg.base.sh aports/scripts/mkimg.base.sh
+#RUN chmod +x aports/scripts/mkimg.base.sh
+
 COPY nightlight-cloud aports/scripts/nightlight-cloud
+COPY dhcpagent aports/scripts/dhcpagent
+COPY metadataagent aports/scripts/metadataagent
+COPY flowmonitoragent aports/scripts/flowmonitoragent
+COPY nightlight-config aports/scripts/nightlight-config
 COPY OVMF_CODE.secboot.fd aports/scripts/OVMF_CODE.secboot.fd
 COPY OVMF_VARS.secboot.fd aports/scripts/OVMF_VARS.secboot.fd
 COPY OVMF_CODE_4M.ms.fd aports/scripts/OVMF_CODE_4M.ms.fd
 COPY OVMF_VARS_4M.ms.fd aports/scripts/OVMF_VARS_4M.ms.fd
 COPY virtio-net.rom aports/scripts/virtio-net.rom
 
-CMD ["sh", "aports/scripts/mkimage.sh", "--tag", "v3.22", "--arch", "x86_64", "--outdir", "/iso", "--repository", "http://dl-cdn.alpinelinux.org/alpine/v3.22/main", "--repository","http://dl-cdn.alpinelinux.org/alpine/v3.22/community", "--profile", "nightlight"]
+CMD ["sh", "aports/scripts/mkimage.sh", "--tag", "v3.22", "--arch", "x86_64", "--outdir", "/iso", "--repository", "http://alpine-mirror.grt.local/v3.22/main", "--repository","http://alpine-mirror.grt.local/v3.22/community", "--profile", "nightlight"]

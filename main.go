@@ -1,31 +1,33 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
+	"strings"
+	"syscall"
 	"time"
 
 	"github.com/asdine/storm/v3"
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/hashicorp/go-hclog"
+	"golang.org/x/net/websocket"
 
-	"github.com/martezr/go-openvswitch/ovs"
 	"github.com/martezr/nightlight-cloud/database"
-	"github.com/martezr/nightlight-cloud/network"
-	"github.com/ovn-org/libovsdb/client"
+	"github.com/martezr/nightlight-cloud/metadatabackend"
+	"github.com/martezr/nightlight-cloud/utils"
 
 	"github.com/evangwt/go-vncproxy"
 )
 
-var dbhost = os.Getenv("DB_DIR")
 var (
-	db            *storm.DB
-	networkClient client.Client
+	db *storm.DB
 )
 
 //go:embed webui/dist/*
@@ -48,18 +50,15 @@ func main() {
 	fmt.Println("==> Nightlight cloud started! Log data will stream in below:")
 	fmt.Println("")
 
+	initialSetup()
+
 	// Connect to the database
-	db = database.StartDB(".")
+	db = database.StartDB("/opt/nightlight/nightlight.db")
 
-	// Perform base configuration
-	baseConfiguration()
+	go metadatabackend.StartMetadataServer(context.Background(), db)
+	go StartDHCPServer(context.Background(), db)
 
-	// Setup networking
-	network.SetupBaseNetworking()
-
-	configureDefaultNetworking()
-	configureDefaultStorage()
-
+	defaultDatastore()
 	// Setup HTTP server with routes
 	r := chi.NewRouter()
 
@@ -79,6 +78,10 @@ func main() {
 	r.Get("/api/v1/vpcs", ListVpcs)
 	r.Put("/api/v1/vpcs/{id}", UpdateVPC)
 	r.Delete("/api/v1/vpcs/{id}", DeleteVPC)
+	r.Get("/api/v1/vpcs/{id}/ips", ListAvailableIPs)
+	r.Get("/api/v1/vpcs/{id}/graph", GetVPCGraph)
+	r.Get("/api/v1/vpcs/{id}/flowlogs", GetVPCFlowLogs)
+	r.Post("/api/v1/vpcs/{id}/ips/release", ReleaseVPCIPAddress)
 
 	// Subnets
 	r.Post("/api/v1/subnets", CreateSubnet)
@@ -88,198 +91,84 @@ func main() {
 	// Instances
 	r.Get("/api/v1/instances", ListInstances)
 	r.Post("/api/v1/instances", CreateInstance)
+	r.Get("/api/v1/instances/{id}", GetInstance)
 	r.Delete("/api/v1/instances/{id}", DeleteInstance)
 	r.Post("/api/v1/instances/{id}/restart", RestartInstance)
+	r.Post("/api/v1/instances/{id}/stop", StopInstance)
+	r.Post("/api/v1/instances/{id}/start", StartInstance)
+	r.Post("/api/v1/instances/{id}/shutdown", ShutdownInstance)
 	r.Post("/api/v1/instances/{id}/sendkeys", SendInstanceConsoleKeys)
 
 	// Datastores
 	r.Get("/api/v1/datastores", ListDatastores)
 	r.Post("/api/v1/datastores", CreateDatastore)
+	r.Get("/api/v1/datastores/{id}", GetDatastore)
 	r.Delete("/api/v1/datastores/{id}", DeleteDatastore)
 	r.Get("/api/v1/datastores/{id}/files", ListDatastoreFiles)
+	r.Post("/api/v1/datastores/{id}/files", UploadDatastoreFile)
+	r.Delete("/api/v1/datastores/{id}/files", DeleteDatastoreFile)
 	r.Post("/api/v1/datastores/{id}/fetch", DownloadDatastoreFile)
-
 	r.Get("/api/v1/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"version":"0.0.1"}`))
 	})
 
-	//vncProxy := NewVNCProxy()
-	//r.Get("/ws", func(w http.ResponseWriter, r *http.Request) {
-	//	h := websocket.Handler(vncProxy.ServeWS)
-	//	h.ServeHTTP(w, r)
-	//})
+	vncProxy := NewVNCProxy()
+	r.Get("/ws/{id}", VNCWebsocketHandler(vncProxy))
 
+	r.Get("/ssh", sshHandler)
 	r.NotFound(NotFoundHandler)
-	hclog.Default().Named("core").Info("Waiting 30 seconds for network to come up...")
-	time.Sleep(30 * time.Second)
 	hclog.Default().Named("core").Info("Web UI available at http://<host-ip>:80/")
 	hclog.Default().Named("core").Info("Default login: root / nightlight")
-	//http.ListenAndServe(":80", r)
-	err := http.ListenAndServe("0.0.0.0:80", r)
-	if err != nil {
-		log.Fatalf("Server failed to start: %v", err)
-	}
-}
 
-// Set the system hostname
-func setHostname(hostname string) error {
-	err := os.WriteFile("/etc/hostname", []byte(hostname), 0644)
-	if err != nil {
-		return err
+	hclog.Default().Named("core").Info("Listening on 0.0.0.0:80")
+
+	srv := &http.Server{
+		Addr:    "0.0.0.0:80",
+		Handler: r,
 	}
 
-	// Set the hostname immediately
-	err = os.WriteFile("/proc/sys/kernel/hostname", []byte(hostname), 0644)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// set root password
-func setRootPassword(password string) error {
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("echo 'root:%s' | chpasswd", password))
-	return cmd.Run()
-}
-
-// configure root ssh access
-func configureRootSSH() error {
-	sshDir := "/root/.ssh"
-	err := os.MkdirAll(sshDir, 0700)
-	if err != nil {
-		return err
-	}
-
-	// For demo purposes, we use a hardcoded public key. In production, consider generating a new key pair or using a secure method.
-	publicKey := ""
-	err = os.WriteFile(sshDir+"/authorized_keys", []byte(publicKey), 0600)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// enable ssh password authentication
-func enableSSHPasswordAuth() error {
-	// check if /etc/ssh/sshd_config.d/10-nightlight.conf exists, if not create it
-	if _, err := os.Stat("/etc/ssh/sshd_config.d/10-nightlight.conf"); os.IsNotExist(err) {
-		err = os.WriteFile("/etc/ssh/sshd_config.d/10-nightlight.conf", []byte("PasswordAuthentication yes\nPermitRootLogin yes\n"), 0644)
-		if err != nil {
-			return err
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %v", err)
 		}
-		restartErr := restartSSHService()
-		if restartErr != nil {
-			return restartErr
-		}
-		return nil
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	hclog.Default().Named("core").Info("Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatalf("Server shutdown failed: %v", err)
 	}
-	return nil
+	hclog.Default().Named("core").Info("Server exited")
 }
 
-// restart ssh service
-func restartSSHService() error {
-	cmd := exec.Command("sh", "-c", "rc-service sshd restart")
-	return cmd.Run()
-}
-
-func baseConfiguration() {
-	// make /opt/nightlight directory
-	os.MkdirAll("/opt/nightlight/volumes", 0755)
-
-	err := setHostname("nightlight-cloud")
-	if err != nil {
-		log.Fatalf("Error setting hostname: %v", err)
+func VNCWebsocketHandler(proxy *vncproxy.Proxy) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		websocket.Handler(proxy.ServeWS).ServeHTTP(w, r)
 	}
-	err = setRootPassword("nightlight")
-	if err != nil {
-		log.Fatalf("Error setting root password: %v", err)
-	}
-	err = configureRootSSH()
-	if err != nil {
-		log.Fatalf("Error configuring root SSH: %v", err)
-	}
-
-	err = enableSSHPasswordAuth()
-	if err != nil {
-		log.Fatalf("Error enabling SSH password authentication: %v", err)
-	}
-
-	UpdateUEFIImages()
 }
 
 func NewVNCProxy() *vncproxy.Proxy {
 	return vncproxy.New(&vncproxy.Config{
 		LogLevel: vncproxy.DebugLevel,
 		TokenHandler: func(r *http.Request) (addr string, err error) {
-			// validate token and get forward vnc addr
-			// ...
-			addr = ":5901"
+			id := chi.URLParam(r, "id")
+			var instance utils.Instance
+			err = db.One("ID", id, &instance)
+			if err != nil {
+				return
+			}
+			addr = fmt.Sprintf(":%d", instance.VNCPort)
 			return
 		},
 	})
 }
 
-func configureDefaultNetworking() {
-	// Create a default VPC and subnet if they don't exist
-	var vpcs []VPC
-	err := db.All(&vpcs)
-	if err != nil {
-		log.Fatalf("Error fetching VPCs: %v", err)
-	}
-	if len(vpcs) == 0 {
-		defaultVPC := VPC{
-			ID:        "defaultvpc",
-			Name:      "defaultvpc",
-			CIDRBlock: "10.0.0.0/16",
-		}
-		db.Save(&defaultVPC)
-
-		defaultSubnet := Subnet{
-			ID:         "defaultsubnet",
-			VPCId:      defaultVPC.ID,
-			Name:       "defaultsubnet",
-			CIDRBlock:  "10.0.0.0/24",
-			BridgeName: "nightlight",
-		}
-		db.Save(&defaultSubnet)
-	}
-
-	// Create metadata network namespace and OVS interface
-	ovsClient := ovs.New()
-	ovsClient.VSwitch.AddPort("nightlight", "mddefaultvpc")
-	ovsClient.VSwitch.Set.Interface("mddefaultvpc", ovs.InterfaceOptions{
-		Type: "internal",
-		ExternalIds: map[string]string{
-			"iface-id":     "mddefaultvpc",
-			"attached-mac": "32:6b:ce:89:41:42",
-		},
-	})
-
-	err = network.CreateNetworkNamespace("mddefaultvpc", "32:6b:ce:89:41:42", "169.254.169.254")
-	if err != nil {
-		log.Fatalf("Error creating network namespace: %v", err)
-	}
-
-	// Create dhcp network namespace and OVS interface
-	ovsClient.VSwitch.AddPort("nightlight", "dhdefaultvpc")
-	ovsClient.VSwitch.Set.Interface("dhdefaultvpc", ovs.InterfaceOptions{
-		Type: "internal",
-		ExternalIds: map[string]string{
-			"iface-id":     "dhdefaultvpc",
-			"attached-mac": "32:6b:ce:89:41:43",
-		},
-	})
-
-	err = network.CreateNetworkNamespace("dhdefaultvpc", "32:6b:ce:89:41:43", "169.254.169.253")
-	if err != nil {
-		log.Fatalf("Error creating network namespace: %v", err)
-	}
-
-}
-
-func configureDefaultStorage() {
+func defaultDatastore() {
 	// Create a default datastore if it doesn't exist
 	var datastores []Datastore
 	err := db.All(&datastores)
@@ -300,59 +189,100 @@ func configureDefaultStorage() {
 	}
 }
 
-// waitForPing pings addr until it responds or timeout elapses.
-func waitForPing(addr string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	for {
-		// send a single ICMP echo request, wait 1s for reply
-		cmd := exec.Command("ping", "-c", "1", "-W", "1", addr)
-		if err := cmd.Run(); err == nil {
-			return nil
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out waiting for ping to %s", addr)
-		}
-		time.Sleep(1 * time.Second)
+func formatAndMount(device, mountPoint string) error {
+	if err := os.MkdirAll(mountPoint, 0755); err != nil {
+		return err
 	}
+
+	if err := exec.Command("mkfs.ext4", device).Run(); err != nil {
+		return err
+	}
+
+	if err := exec.Command("mount", device, mountPoint).Run(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func UpdateUEFIImages() {
-	text := `
-	{
-    "description": "UEFI firmware for x86_64, with Secure Boot and SMM",
-    "interface-types": [
-        "uefi"
-    ],
-    "mapping": {
-        "device": "flash",
-        "executable": {
-            "filename": "/etc/OVMF_CODE_4M.ms.fd",
-            "format": "raw"
-        },
-        "nvram-template": {
-            "filename": "/etc/OVMF_VARS_4M.ms.fd",
-            "format": "raw"
-        }
-    },
-    "targets": [
-        {
-            "architecture": "x86_64",
-            "machines": [
-                "pc-q35-*"
-            ]
-        }
-    ],
-    "features": [
-        "acpi-s3",
-        "amd-sev",
-        "requires-smm",
-        "secure-boot",
-        "verbose-dynamic"
-    ],
-    "tags": [
+func mountDisk(device, mountPoint string) error {
+	if err := os.MkdirAll(mountPoint, 0755); err != nil {
+		return err
+	}
 
-    ]
-}`
-	os.WriteFile("/usr/share/qemu/firmware/50-edk2-x86_64-secure.json", []byte(text), 0644)
+	if err := exec.Command("mount", device, mountPoint).Run(); err != nil {
+		return err
+	}
 
+	return nil
+}
+
+func checkDiskFormatted(diskName string) bool {
+	// Run blkid command to get filesystem info
+	cmd := exec.Command("blkid")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalf("Error executing blkid command: %s", err)
+	}
+
+	// Convert output to string and check for the disk name and filesystem
+	outputStr := string(output)
+	if strings.Contains(outputStr, diskName) {
+		// Check if the disk has a filesystem (FSTYPE)
+		if strings.Contains(outputStr, "TYPE=") {
+			return true
+		}
+	}
+	return false
+}
+
+// check if a disk is mounted at a given mount point
+func isDiskMounted(mountPoint string) bool {
+	cmd := exec.Command("mountpoint", "-q", mountPoint)
+	err := cmd.Run()
+	return err == nil
+}
+
+func initialSetup() {
+	diskStatus := checkDiskFormatted("/dev/sda")
+	if diskStatus {
+		hclog.Default().Named("core").Info("Disk /dev/sda is already formatted.")
+		if isDiskMounted("/data") {
+			hclog.Default().Named("core").Info("Disk /dev/sda is already mounted at /data.")
+			return
+		}
+		hclog.Default().Named("core").Info("Disk /dev/sda is not mounted. Attempting to mount...")
+		err := mountDisk("/dev/sda", "/data")
+		if err != nil {
+			hclog.Default().Named("core").Error(fmt.Sprintf("Error mounting disk: %v", err))
+		} else {
+			hclog.Default().Named("core").Info("Successfully mounted disk to /data")
+		}
+	} else {
+		hclog.Default().Named("core").Info("Disk /dev/sda is not formatted. Formatting and mounting...")
+		// Create necessary directories
+		dirs := []string{"/opt/nightlight"}
+		for _, dir := range dirs {
+			err := os.MkdirAll(dir, 0755)
+			if err != nil {
+				hclog.Default().Named("core").Error(fmt.Sprintf("Error creating directory %s: %v", dir, err))
+			} else {
+				hclog.Default().Named("core").Info(fmt.Sprintf("Successfully created directory: %s", dir))
+			}
+		}
+		// Format and mount the disk
+		err := formatAndMount("/dev/sda", "/opt/nightlight")
+		if err != nil {
+			hclog.Default().Named("core").Error(fmt.Sprintf("Error formatting and mounting disk: %v", err))
+		} else {
+			hclog.Default().Named("core").Info("Successfully formatted and mounted disk to /opt/nightlight")
+		}
+		// write the current version to a file
+		err = os.WriteFile("/opt/nightlight/version.json", []byte(`{"version":"0.0.1"}`), 0644)
+		if err != nil {
+			hclog.Default().Named("core").Error(fmt.Sprintf("Error writing version file: %v", err))
+		} else {
+			hclog.Default().Named("core").Info("Successfully wrote version file")
+		}
+	}
 }

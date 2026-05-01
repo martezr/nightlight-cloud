@@ -20,7 +20,6 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Button } from "./components/ui/button"
 import { Input } from "./components/ui/input"
 import { Label } from "./components/ui/label"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select"
 
 async function getData(): Promise<Network[]> {
   // Fetch data from your API here.
@@ -35,13 +34,12 @@ async function getData(): Promise<Network[]> {
 export default function Page() {
   const [data, setData] = useState<Network[]>([])
   const [open, setOpen] = useState(false)
-  const [datastoreType, setDatastoreType] = useState("")
 
   useEffect(() => {
     getData().then(setData)
   }, [])
 
-async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
+async function handleAddVPC(event: React.FormEvent<HTMLFormElement>) {
   event.preventDefault();
   console.log("Submitting form");
   const formData = new FormData(event.currentTarget);
@@ -53,13 +51,16 @@ async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
   // Create a JSON object from the form data
   const jsonObject = {
     "name": intData.name || "",
-    "type": intData.datastoreType || "",
+    "cidrBlock": intData.cidrBlock || "",
     "description": intData.description || "",
-    "localPath": intData.localPath || "",
+    "dnsServers": intData.dnsServers ? intData.dnsServers.split(",").map((s: string) => s.trim()) : [],
+    "domainName": intData.domainName || "",
+    "ntpServers": intData.ntpServers ? intData.ntpServers.split(",").map((s: string) => s.trim()) : [],
   };
+  console.log("JSON object to send:", jsonObject)
 
   try {
-    const response = await fetch("/api/v1/datastores", {
+    const response = await fetch("/api/v1/vpcs", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -67,7 +68,7 @@ async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
       body: JSON.stringify(jsonObject),
     });
     if (!response.ok) {
-      throw new Error("Failed to add datastore");
+      throw new Error("Failed to add VPC");
     }
     // Optionally handle success (e.g., refresh data, close dialog)
   } catch (error) {
@@ -113,8 +114,8 @@ async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
                 </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
-                  <form id="add-datastore-form" onSubmit={async (event) => {
-                    await handleAddDatastore(event);
+                  <form id="add-vpc-form" onSubmit={async (event) => {
+                    await handleAddVPC(event);
                   }
                 }>
                   <DialogHeader>
@@ -133,53 +134,28 @@ async function handleAddDatastore(event: React.FormEvent<HTMLFormElement>) {
                       <Input id="description-1" name="description" defaultValue="" />
                     </div>
                     <div className="grid gap-3">
-                      <Label htmlFor="datastore-type-value-1">Datastore Type</Label>
-                      <Select
-                        name="datastoreType"
-                        defaultValue=""
-                        onValueChange={(value) => {
-                          // handle value change here, e.g. set state or form value
-                          console.log("Selected datastore type:", value)
-                          setDatastoreType(value)
-                        }}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a value" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectGroup>
-                            <SelectItem value="local">Local</SelectItem>
-                            <SelectItem value="nfs">NFS</SelectItem>
-                            <SelectItem value="iscsi">iSCSI</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="cidr-block-1">CIDR Block</Label>
+                      <Input id="cidr-block-1" name="cidrBlock" defaultValue="" />
                     </div>
-                    {datastoreType === "local" && (
-                      <div className="grid gap-3">
-                        <Label htmlFor="local-path-1">Path</Label>
-                        <Input id="local-path-1" name="localPath" defaultValue="" />
-                      </div>          
-                    )}
-                    {datastoreType === "nfs" && (
-                      <div className="grid gap-3">
-                        <Label htmlFor="nfs-username-1">Username</Label>
-                        <Input id="nfs-username-1" name="nfsUsername" defaultValue="" />
-                      </div>          
-                    )}
-                    {datastoreType === "nfs" && (
-                      <div className="grid gap-3">
-                        <Label htmlFor="nfs-password-1">Password</Label>
-                        <Input id="nfs-password-1" name="nfsPassword" type="password" />
-                      </div>          
-                    )}
+                    <div className="grid gap-3">
+                      <Label htmlFor="dns-servers-1">DNS Servers</Label>
+                      <Input id="dns-servers-1" name="dnsServers" defaultValue="" />
+                    </div>
+                    <div className="grid gap-3">
+                      <Label htmlFor="domain-name-1">Domain Name</Label>
+                      <Input id="domain-name-1" name="domainName" defaultValue="" />
+                    </div>                    
+                    <div className="grid gap-3">
+                      <Label htmlFor="ntp-servers-1">NTP Servers</Label>
+                      <Input id="ntp-servers-1" name="ntpServers" defaultValue="" />
+                    </div>
                   </div>
                                   </form>
                  <DialogFooter>
                     <DialogClose asChild>
                       <Button variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button form="add-datastore-form" type="submit">Create VPC</Button>
+                    <Button form="add-vpc-form" type="submit">Create VPC</Button>
                   </DialogFooter>
                 </DialogContent>
             </Dialog>
