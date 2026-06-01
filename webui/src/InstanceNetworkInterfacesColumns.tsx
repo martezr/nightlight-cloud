@@ -50,10 +50,10 @@ export const instanceNetworkInterfacsColumns: ColumnDef<InstanceNetworkInterface
     ),
   },  
   {
-    accessorKey: "vpcId",
-    header: "VPC",
+    accessorKey: "vnetId",
+    header: "VNet ID",
     cell: ({ row }) => (
-      <div >{row.getValue("vpcId")}</div>
+      <div >{row.getValue("vnetId")}</div>
     ),
   },
   {

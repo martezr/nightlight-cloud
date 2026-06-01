@@ -130,14 +130,14 @@ export const columns: ColumnDef<Network>[] = [
             <DropdownMenuItem
               onClick={async (event) => {
                event.preventDefault();
-              await fetch(`/api/v1/vpcs/${network.id}`, {
+              await fetch(`/api/v1/vnets/${network.id}`, {
                 method: "DELETE",
               })
               window.location.reload()
               }}
               className="text-red-600"
             >
-              Delete VPC
+              Delete VNet
             </DropdownMenuItem>
       </AlertDialogTrigger>
       <AlertDialogContent>

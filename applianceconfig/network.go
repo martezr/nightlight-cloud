@@ -19,11 +19,20 @@ func SetupBaseNetworking() {
 	}
 	c := ovs.New()
 	ConfigureManagementNetwork(c)
-	ConfigureDefaultVPCNetworking(c)
+	ConfigureInternetTransitNetworking(c)
+	loopback, err := netlink.LinkByName("lo")
+	if err != nil {
+		log.Println("Error getting loopback interface:", err)
+		return
+	}
+	netlink.LinkSetUp(loopback)
+	netlink.AddrAdd(loopback, &netlink.Addr{IPNet: &net.IPNet{
+		IP:   net.ParseIP("172.16.31.254"),
+		Mask: net.CIDRMask(32, 32),
+	}})
 }
 
 func ConfigureManagementNetwork(c *ovs.Client) {
-
 	// Check if bridge "nl-external" already exists
 	bridgeExists := false
 	bridges, err := netlink.LinkList()
@@ -68,7 +77,7 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 		return
 	}
 	netlink.AddrAdd(link, &netlink.Addr{IPNet: &net.IPNet{
-		IP:   net.ParseIP("10.0.0.237"),
+		IP:   net.ParseIP("10.0.0.238"),
 		Mask: net.CIDRMask(24, 32),
 	}})
 
@@ -83,18 +92,18 @@ func ConfigureManagementNetwork(c *ovs.Client) {
 	netlink.RouteAdd(route)
 }
 
-func ConfigureDefaultVPCNetworking(c *ovs.Client) {
-	c.VSwitch.AddBridge("nightlight")
-	c.VSwitch.AddPort("nl-external", "nightlight-patch")
-	c.VSwitch.AddPort("nightlight", "nl-external-patch")
+func ConfigureInternetTransitNetworking(c *ovs.Client) {
+	c.VSwitch.AddBridge("nl-transit")
+	//	c.VSwitch.AddPort("nl-external", "nl-int-transit-patch")
+	//	c.VSwitch.AddPort("nl-int-transit", "nl-external-patch")
 
-	c.VSwitch.Set.Interface("nl-external-patch", ovs.InterfaceOptions{
-		Type: "patch",
-		Peer: "nightlight-patch",
-	})
+	//	c.VSwitch.Set.Interface("nl-external-patch", ovs.InterfaceOptions{
+	//		Type: "patch",
+	//		Peer: "nl-int-transit-patch",
+	//	})
 
-	c.VSwitch.Set.Interface("nightlight-patch", ovs.InterfaceOptions{
-		Type: "patch",
-		Peer: "nl-external-patch",
-	})
+	//	c.VSwitch.Set.Interface("nl-int-transit-patch", ovs.InterfaceOptions{
+	//		Type: "patch",
+	//		Peer: "nl-external-patch",
+	//	})
 }

@@ -40,7 +40,7 @@ function useNetworkDetails(id?: string) {
   useEffect(() => {
     if (!id) return
 
-    fetch(`/api/v1/vpcs/${id}`)
+    fetch(`/api/v1/vnets/${id}`)
       .then((res) => res.json())
       .then(setData)
       .finally(() => setLoading(false))
@@ -58,7 +58,7 @@ function useNetworkFlowDetails(id?: string) {
         if (!id) return
         setLoading(true)
         setError(null)
-        fetch(`/api/v1/vpcs/${id}/flowlogs`)
+        fetch(`/api/v1/vnets/${id}/flowlogs`)
             .then((res) => {
                 if (!res.ok) throw new Error("Failed to fetch network flow details")
                 return res.json()
@@ -221,7 +221,7 @@ export default function Page() {
     let mounted = true
 
     const loadGraph = () => {
-      fetch(`/api/v1/vpcs/${id}/graph`)
+      fetch(`/api/v1/vnets/${id}/graph`)
         .then((res) => res.json())
         .then((data) => {
           if (!mounted) return

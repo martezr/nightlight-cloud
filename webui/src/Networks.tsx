@@ -23,12 +23,12 @@ import { Label } from "./components/ui/label"
 
 async function getData(): Promise<Network[]> {
   // Fetch data from your API here.
-  const response = await fetch("/api/v1/vpcs")
+  const response = await fetch("/api/v1/vnets")
   if (!response.ok) {
-    throw new Error("Failed to fetch vpcs")
+    throw new Error("Failed to fetch vnets")
   }
-  const vpcs = await response.json()
-  return vpcs
+  const vnets = await response.json()
+  return vnets
 }
 
 export default function Page() {
@@ -39,7 +39,7 @@ export default function Page() {
     getData().then(setData)
   }, [])
 
-async function handleAddVPC(event: React.FormEvent<HTMLFormElement>) {
+async function handleAddVNet(event: React.FormEvent<HTMLFormElement>) {
   event.preventDefault();
   console.log("Submitting form");
   const formData = new FormData(event.currentTarget);
@@ -60,7 +60,7 @@ async function handleAddVPC(event: React.FormEvent<HTMLFormElement>) {
   console.log("JSON object to send:", jsonObject)
 
   try {
-    const response = await fetch("/api/v1/vpcs", {
+    const response = await fetch("/api/v1/vnets", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -68,7 +68,7 @@ async function handleAddVPC(event: React.FormEvent<HTMLFormElement>) {
       body: JSON.stringify(jsonObject),
     });
     if (!response.ok) {
-      throw new Error("Failed to add VPC");
+      throw new Error("Failed to add VNet");
     }
     // Optionally handle success (e.g., refresh data, close dialog)
   } catch (error) {
@@ -110,18 +110,18 @@ async function handleAddVPC(event: React.FormEvent<HTMLFormElement>) {
                   type="button"
                   className="ml-auto"
                 >
-                  Create VPC
+                  Create VNet
                 </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-[425px]">
-                  <form id="add-vpc-form" onSubmit={async (event) => {
-                    await handleAddVPC(event);
+                  <form id="add-vnet-form" onSubmit={async (event) => {
+                    await handleAddVNet(event);
                   }
                 }>
                   <DialogHeader>
-                    <DialogTitle>Create VPC</DialogTitle>
+                    <DialogTitle>Create VNet</DialogTitle>
                     <DialogDescription>
-                      Create a new VPC by filling out the form below.
+                      Create a new VNet by filling out the form below.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4" style={{paddingTop: "5px"}}>
@@ -155,7 +155,7 @@ async function handleAddVPC(event: React.FormEvent<HTMLFormElement>) {
                     <DialogClose asChild>
                       <Button variant="outline">Cancel</Button>
                     </DialogClose>
-                    <Button form="add-vpc-form" type="submit">Create VPC</Button>
+                    <Button form="add-vnet-form" type="submit">Create VNet</Button>
                   </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -1,34 +1,46 @@
-# create custom alpine linux iso using aports
-FROM alpine:3.22
-RUN apk update && apk upgrade
-RUN apk add --no-cache bash curl xorriso syslinux mtools abuild alpine-conf squashfs-tools grub git doas openssh coreutils
-RUN git clone --depth=1 https://gitlab.alpinelinux.org/alpine/aports.git
-RUN abuild-keygen -a -n
-RUN chmod +x aports/scripts/mkimage.sh
+ARG ALPINE_IMAGE_VERSION=3.23
+ARG APORTS_TAG=v3.23.4
+ARG BINFMT_IMAGE=tonistiigi/binfmt:latest
 
-COPY mkimg.nightlight.sh aports/scripts
-RUN mkdir /iso
+FROM ${BINFMT_IMAGE} AS binfmt
 
-# Set TMPDIR if /tmp is too small (e.g., in a default Docker container)
-# Adjust the path if you prefer a different location
-ENV TMPDIR=/root/tmp
-RUN mkdir -pv ${TMPDIR}
+FROM alpine:${ALPINE_IMAGE_VERSION}
+RUN apk add alpine-sdk build-base apk-tools alpine-conf busybox \
+  fakeroot xorriso squashfs-tools sudo \
+  mtools dosfstools grub-efi git
 
-COPY genapkovl-mkimgoverlay.sh aports/scripts/genapkovl-mkimgoverlay.sh
-RUN chmod +x aports/scripts/genapkovl-mkimgoverlay.sh
+# syslinux is missing for aarch64
+ARG TARGETARCH
+RUN if [ "${TARGETARCH}" = "amd64" ]; then apk add syslinux; fi
 
-#COPY mkimg.base.sh aports/scripts/mkimg.base.sh
-#RUN chmod +x aports/scripts/mkimg.base.sh
+COPY --from=binfmt /usr/bin /binfmt
 
-COPY nightlight-cloud aports/scripts/nightlight-cloud
-COPY dhcpagent aports/scripts/dhcpagent
-COPY metadataagent aports/scripts/metadataagent
-COPY flowmonitoragent aports/scripts/flowmonitoragent
-COPY nightlight-config aports/scripts/nightlight-config
-COPY OVMF_CODE.secboot.fd aports/scripts/OVMF_CODE.secboot.fd
-COPY OVMF_VARS.secboot.fd aports/scripts/OVMF_VARS.secboot.fd
-COPY OVMF_CODE_4M.ms.fd aports/scripts/OVMF_CODE_4M.ms.fd
-COPY OVMF_VARS_4M.ms.fd aports/scripts/OVMF_VARS_4M.ms.fd
-COPY virtio-net.rom aports/scripts/virtio-net.rom
+RUN addgroup root abuild
+RUN abuild-keygen -i -a -n
+RUN apk update
 
-CMD ["sh", "aports/scripts/mkimage.sh", "--tag", "v3.22", "--arch", "x86_64", "--outdir", "/iso", "--repository", "http://alpine-mirror.grt.local/v3.22/main", "--repository","http://alpine-mirror.grt.local/v3.22/community", "--profile", "nightlight"]
+RUN echo "APORTS_TAG='${APORTS_TAG}'"
+
+RUN git clone \
+    --depth=1 \
+    --branch v3.23.4 \
+    https://github.com/alpinelinux/aports.git \
+    /aports
+
+#ADD src/aports /home/build/aports
+# Remove --no-chown which is deprecated in apk 3.0 as alias for --usermode (disallowed as root)
+RUN sed -i 's/--initdb --no-chown/--initdb/' /aports/scripts/mkimage.sh
+WORKDIR /aports/scripts
+
+COPY mkimg.nightlight.sh /aports/scripts/
+COPY mkimg.base.sh /aports/scripts/
+COPY mkimg.standard.sh /aports/scripts/
+
+RUN chmod +x /aports/scripts/mkimg.nightlight.sh
+RUN chmod +x /aports/scripts/mkimg.base.sh
+RUN chmod +x /aports/scripts/mkimg.standard.sh 
+#COPY metadataagent /aports/scripts/
+RUN ls -l /aports/scripts/
+
+#ENTRYPOINT ["sh", "./mkimage.sh"]
+#CMD ["sh", "./mkimage.sh", "--tag", "v3.23", "--arch", "x86_64", "--outdir", "/iso", "--repository", "http://alpine-mirror.grt.local/v3.23/main", "--repository", "http://alpine-mirror.grt.local/v3.23/community", "--profile", "nightlight"]

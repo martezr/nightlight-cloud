@@ -8,6 +8,7 @@ type InstanceIPMapping struct {
 type Instance struct {
 	ID                   string                   `json:"id" storm:"id,index"`
 	Name                 string                   `json:"name" storm:"index"`
+	InstanceType         string                   `json:"instanceType" storm:"index"`
 	Description          string                   `json:"description"`
 	InitializationStatus string                   `json:"initializationStatus"`
 	BootType             string                   `json:"bootType"`
@@ -21,7 +22,9 @@ type Instance struct {
 	PowerState           string                   `json:"powerState"`
 	ImageId              string                   `json:"imageId"`
 	InstanceProfile      string                   `json:"instanceProfile"`
+	SiteId               string                   `json:"siteId"`
 	DatastoreId          string                   `json:"datastoreId"`
+	IPXEScript           string                   `json:"ipxeScript"`
 	Kickstart            string                   `json:"kickstart"`
 	WinAutoattend        string                   `json:"winAutoattend"`
 	SecureBoot           bool                     `json:"secureBoot"`
@@ -71,5 +74,5 @@ type NetworkInterface struct {
 	Connected   bool   `json:"connected"`
 	MacAddress  string `json:"macAddress"`
 	BridgeName  string `json:"bridgeName"`
-	VPCId       string `json:"vpcId"`
+	SubnetId    string `json:"subnetId"`
 }

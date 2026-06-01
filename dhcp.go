@@ -12,7 +12,7 @@ import (
 	"log"
 
 	"github.com/asdine/storm/v3"
-	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi"
 )
 
 var (
@@ -99,3 +99,4 @@ func StartDHCPServer(ctx context.Context, db *storm.DB) error {
 		return err
 	}
 }
+

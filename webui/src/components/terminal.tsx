@@ -2,69 +2,59 @@ import { useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { AttachAddon } from '@xterm/addon-attach';
-import '@xterm/xterm/css/xterm.css'; // Import the xterm.js CSS
+import '@xterm/xterm/css/xterm.css';
 
 const TerminalComponent = () => {
-  const terminalRef = useRef(null);
-  const term = useRef<any>(null);
+  // This div is placed inside `absolute inset-0` in app-sidebar, so it always
+  // has explicit pixel dimensions that FitAddon's getComputedStyle() can read.
+  const terminalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 1. Instantiate the terminal
-    term.current = new Terminal({
-      cols: 120, // Set width in character columns
-      rows: 24, // Set height in character rows
-      // or use CSS to define pixel dimensions on the container
+    if (!terminalRef.current) return;
+
+    const term = new Terminal({
+      cursorBlink: true,
+      fontFamily: 'Menlo, Monaco, "Cascadia Code", "Courier New", monospace',
+      fontSize: 13,
     });
     const fitAddon = new FitAddon();
-    term.current.loadAddon(fitAddon);
-    fitAddon.fit(); // Fit the terminal to the parent container initially
+    term.loadAddon(fitAddon);
+    term.open(terminalRef.current);
 
-    // 2. Open the terminal in the DOM element
-    term.current.open(terminalRef.current);
-    term.current.write('Requesting a cloud shell...\r\n');
+    // The container has explicit pixel dimensions (absolute positioning), so
+    // a single rAF is enough for layout to stabilise before we fit.
+    requestAnimationFrame(() => fitAddon.fit());
 
-    // 3. Establish WebSocket connection
-    // Replace 'ws://localhost:8080' with your backend WebSocket URL
-    const socket = new WebSocket('ws://10.0.0.237/ssh'); 
+    term.write('Requesting a cloud shell...\r\n');
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socket = new WebSocket(`${protocol}//${window.location.host}/ssh`);
     socket.binaryType = 'arraybuffer';
 
-    // 4. Use the AttachAddon to bind the terminal and WebSocket
     const attachAddon = new AttachAddon(socket);
-    term.current.loadAddon(attachAddon);
+    term.loadAddon(attachAddon);
 
-    // Optional: Handle connection status messages
     socket.onopen = () => {
-      term.current.write('Connection established.\r\n\n');
-    };
-
-    //socket.onerror = (error) => {
-    //  term.current.write(`WebSocket Error: ${error}\n`);
-    //};
-
-    // Handle window resize events
-    const handleResize = () => {
+      term.write('Connection established.\r\n\n');
       fitAddon.fit();
     };
-    window.addEventListener('resize', handleResize);
 
-  /*  // 5. Handle terminal resizing (requires backend implementation to handle 'resize' events)
-    const handleResize = () => {
-        const { rows, cols } = term.current.size;
-        socket.send(JSON.stringify({ type: 'resize', rows, cols }));
-    };
-    // Note: A fit addon or custom logic is often needed for dynamic resizing
-    window.addEventListener('resize', handleResize);
-*/
+    // Refit whenever the container changes size (sidebar collapse, window resize)
+    const ro = new ResizeObserver(() => fitAddon.fit());
+    ro.observe(terminalRef.current!);
 
-    // Cleanup function
+    const handleWindowResize = () => fitAddon.fit();
+    window.addEventListener('resize', handleWindowResize);
+
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', handleWindowResize);
+      ro.disconnect();
       socket.close();
-      term.current.dispose();
+      term.dispose();
     };
   }, []);
 
-  return <div ref={terminalRef} style={{ height: '100%', width: '100%'}} />;
+  return <div ref={terminalRef} className="h-full w-full" />;
 };
 
 export default TerminalComponent;

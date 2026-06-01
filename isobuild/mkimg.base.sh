@@ -31,7 +31,7 @@ section_kernels() {
 	local _f _a _pkgs
 	for _f in $kernel_flavors; do
 #		_pkgs="linux-$_f linux-firmware wireless-regdb $modloop_addons"
-		_pkgs="linux-$_f linux-firmware $modloop_addons"
+		_pkgs="linux-$_f $modloop_addons"
 		for _a in $kernel_addons; do
 			_pkgs="$_pkgs $_a-$_f"
 		done
@@ -278,26 +278,6 @@ create_image_iso() {
 		mcopy -i ${DESTDIR}/boot/grub/efi.img -s ${DESTDIR}/efi ::
 		touch -md "@${SOURCE_DATE_EPOCH}" ${DESTDIR}/boot/grub/efi.img
 
-		ls -alh
-		cp aports/scripts/assets/splash.png ${DESTDIR}/boot/grub/splash.png
-		cp aports/scripts/assets/theme.txt ${DESTDIR}/boot/grub/theme.txt
-
-
-		mkdir -p "$DESTDIR/usr/share/plymouth/themes/nightlight"
-
-		cp -r "aports/scripts/assets/plymouth/nightlight/"* \
-			"$DESTDIR/usr/share/plymouth/themes/nightlight/"
-
-		mkdir -p "$DESTDIR/etc/plymouth"
-
-		cat > "$DESTDIR/etc/plymouth/plymouthd.conf" <<- EOF
-		[Daemon]
-		Theme=nightlight
-		EOF
-		mkdir -p "$DESTDIR/etc/local.d"
-		echo "plymouthd --mode=boot --attach-to-session" >> "$DESTDIR/etc/local.d/plymouth.start"
-		chmod +x "$DESTDIR/etc/local.d/plymouth.start"
-
 		# Enable EFI boot
 		if [ -z "$_isolinux" ]; then
 			# efi boot only
@@ -372,9 +352,7 @@ profile_base() {
 		x86_64) initfs_features="$initfs_features nfit";;
 		arm*|aarch64|riscv64) initfs_features="$initfs_features phy";;
 	esac
-	apks="alpine-base apk-cron busybox chrony dhcpcd doas e2fsprogs
-		kbd-bkeymaps network-extras openntpd openssl openssh
-		tzdata wget"
+	apks=""
 	apkovl=
 	hostname="alpine"
 }

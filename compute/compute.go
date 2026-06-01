@@ -303,14 +303,15 @@ func CreateVM(instanceDef utils.Instance, instancePath string) (utils.Instance, 
 	sataIndex := 0
 	for _, disk := range storageDisks {
 		var diskTarget string
-		if disk.BusType == "virtio" {
+		switch disk.BusType {
+		case "virtio":
 			diskTarget = virtioDisks[virtioIndex]
 			virtioIndex++
-		} else if disk.BusType == "sata" {
+		case "sata":
 			diskTarget = sataDisks[sataIndex]
 			sataIndex++
-		} else {
-			fmt.Errorf("unsupported bus type: %s", disk.BusType)
+		default:
+			fmt.Printf("unsupported bus type: %s\n", disk.BusType)
 			continue
 		}
 		//diskPath := fmt.Sprintf("%s/%s_disk_%s.qcow2", instancePath, instanceDef.ID, diskTarget)
@@ -552,6 +553,91 @@ func DeleteVM(vmId string, datastorePath string) {
 	if removeErr != nil {
 		fmt.Println(removeErr)
 	}
+}
+
+// libvirtDomainState maps a libvirt domain state integer to a human-readable
+// string consistent with the PowerState field on utils.Instance.
+//
+// Libvirt state values (virDomainState):
+//
+//	0 = no state, 1 = running, 2 = blocked, 3 = paused,
+//	4 = shutting down, 5 = shut off, 6 = crashed, 7 = PM suspended
+func libvirtDomainState(state int32) string {
+	switch state {
+	case 1:
+		return "running"
+	case 3:
+		return "paused"
+	case 4:
+		return "shutting-down"
+	case 5:
+		return "stopped"
+	case 6:
+		return "crashed"
+	default:
+		return "unknown"
+	}
+}
+
+// dialLibvirt opens a single libvirt connection.  Returns nil on failure so
+// callers can treat a missing libvirt socket as "all domains unknown".
+func dialLibvirt() *libvirt.Libvirt {
+	c, err := net.DialTimeout("unix", "/var/run/libvirt/libvirt-sock", 5*time.Second)
+	if err != nil {
+		return nil
+	}
+	l := libvirt.New(c)
+	if err := l.Connect(); err != nil {
+		return nil
+	}
+	return l
+}
+
+// ListVMPowerStates opens one libvirt connection and returns the live power
+// state for each VM ID in the provided slice.  Unknown or unreachable VMs
+// default to "stopped".
+func ListVMPowerStates(vmIds []string) map[string]string {
+	states := make(map[string]string, len(vmIds))
+	for _, id := range vmIds {
+		states[id] = "unknown"
+	}
+
+	l := dialLibvirt()
+	if l == nil {
+		return states
+	}
+
+	for _, vmId := range vmIds {
+		dom, err := l.DomainLookupByName(vmId)
+		if err != nil {
+			states[vmId] = "stopped"
+			continue
+		}
+		state, _, err := l.DomainGetState(dom, 0)
+		if err != nil {
+			states[vmId] = "unknown"
+			continue
+		}
+		states[vmId] = libvirtDomainState(state)
+	}
+	return states
+}
+
+// GetVMPowerState returns the live power state for a single VM.
+func GetVMPowerState(vmId string) string {
+	l := dialLibvirt()
+	if l == nil {
+		return "unknown"
+	}
+	dom, err := l.DomainLookupByName(vmId)
+	if err != nil {
+		return "stopped"
+	}
+	state, _, err := l.DomainGetState(dom, 0)
+	if err != nil {
+		return "unknown"
+	}
+	return libvirtDomainState(state)
 }
 
 func ShutdownVM(vmId string) {

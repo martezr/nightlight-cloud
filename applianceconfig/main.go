@@ -15,7 +15,7 @@ import (
 func main() {
 	baseConfiguration()
 	SetupBaseNetworking()
-	configureDefaultNetworking()
+	//configureDefaultNetworking()
 }
 
 func baseConfiguration() {
@@ -41,7 +41,6 @@ func baseConfiguration() {
 	}
 
 	UpdateUEFIImages()
-	//EnsureInterfaceOperational("nl-external", "10.0.0.237/24", "10.0.0.237", 60*time.Second)
 }
 
 // Set the system hostname
@@ -110,18 +109,18 @@ func restartSSHService() error {
 func configureDefaultNetworking() {
 	// Create dhcp network namespace and OVS interface
 	ovsClient := ovs.New()
-	ovsClient.VSwitch.AddPort("nightlight", "dhdefaultvpc")
-	ovsClient.VSwitch.Set.Interface("dhdefaultvpc", ovs.InterfaceOptions{
+	ovsClient.VSwitch.AddPort("nl-transit", "dhdefaultvnet")
+	ovsClient.VSwitch.Set.Interface("dhdefaultvnet", ovs.InterfaceOptions{
 		Type: "internal",
 		ExternalIds: map[string]string{
-			"iface-id":     "dhdefaultvpc",
+			"iface-id":     "dhdefaultvnet",
 			"attached-mac": "32:6b:ce:89:41:43",
 		},
 	})
 
 	time.Sleep(1 * time.Second) // wait for OVS to create the interface before trying to use it
 
-	err := CreateNetworkNamespace("dhdefaultvpc", "32:6b:ce:89:41:43", "169.254.169.253")
+	err := CreateNetworkNamespace("dhdefaultvnet", "32:6b:ce:89:41:43", "169.254.169.253")
 	if err != nil {
 		log.Fatalf("Error creating network namespace: %v", err)
 	}
@@ -131,18 +130,18 @@ func configureDefaultNetworking() {
 	}
 
 	// Create metadata network namespace and OVS interface
-	ovsClient.VSwitch.AddPort("nightlight", "mddefaultvpc")
-	ovsClient.VSwitch.Set.Interface("mddefaultvpc", ovs.InterfaceOptions{
+	ovsClient.VSwitch.AddPort("nl-transit", "mddefaultvnet")
+	ovsClient.VSwitch.Set.Interface("mddefaultvnet", ovs.InterfaceOptions{
 		Type: "internal",
 		ExternalIds: map[string]string{
-			"iface-id":     "mddefaultvpc",
+			"iface-id":     "mddefaultvnet",
 			"attached-mac": "32:6b:ce:89:41:42",
 		},
 	})
 
 	time.Sleep(1 * time.Second) // wait for OVS to create the interface before trying to use it
 
-	err = CreateNetworkNamespace("mddefaultvpc", "32:6b:ce:89:41:42", "169.254.169.254")
+	err = CreateNetworkNamespace("mddefaultvnet", "32:6b:ce:89:41:42", "169.254.169.254")
 	if err != nil {
 		log.Fatalf("Error creating network namespace: %v", err)
 	}
@@ -155,16 +154,16 @@ func configureDefaultNetworking() {
 	// Create flow monitor network namespace and OVS interface
 	//
 	time.Sleep(5 * time.Second) // wait for OVS to be ready before adding mirror and port
-	ovsClient.VSwitch.AddPort("nightlight", "fmdefaultvpc")
-	ovsClient.VSwitch.Set.Interface("fmdefaultvpc", ovs.InterfaceOptions{
+	ovsClient.VSwitch.AddPort("nl-transit", "fmdefaultvnet")
+	ovsClient.VSwitch.Set.Interface("fmdefaultvnet", ovs.InterfaceOptions{
 		Type: "internal",
 		ExternalIds: map[string]string{
-			"iface-id":     "fmdefaultvpc",
+			"iface-id":     "fmdefaultvnet",
 			"attached-mac": "32:6b:ce:89:41:44",
 		},
 	})
 
-	err = CreateNetworkNamespace("fmdefaultvpc", "32:6b:ce:89:41:44", "169.254.169.252")
+	err = CreateNetworkNamespace("fmdefaultvnet", "32:6b:ce:89:41:44", "169.254.169.252")
 	if err != nil {
 		log.Fatalf("Error creating network namespace: %v", err)
 	}
@@ -176,16 +175,16 @@ func configureDefaultNetworking() {
 	time.Sleep(20 * time.Second) // wait for OVS to create the interface before trying to use it
 
 	c := ovs.New()
-	ports, err := c.VSwitch.ListPorts("nightlight")
+	ports, err := c.VSwitch.ListPorts("nl-transit")
 	if err != nil {
 		hclog.Default().Named("core").Error(err.Error())
 	}
 	var metadataOfPort int
 
-	c.VSwitch.AddMirror("nightlight", ovs.MirrorOptions{
-		Name:       "mirror_fmdefaultvpc",
+	c.VSwitch.AddMirror("nl-transit", ovs.MirrorOptions{
+		Name:       "mirror_fmdefaultvnet",
 		SelectAll:  true,
-		OutputPort: "fmdefaultvpc",
+		OutputPort: "fmdefaultvnet",
 	})
 
 	for _, port := range ports {
@@ -194,7 +193,7 @@ func configureDefaultNetworking() {
 		if err != nil {
 			hclog.Default().Named("core").Error(err.Error())
 		}
-		if portDetails.Name == "mddefaultvpc" {
+		if portDetails.Name == "mddefaultvnet" {
 			metadataOfPort, err = strconv.Atoi(portDetails.OFPort)
 			if err != nil {
 				hclog.Default().Named("core").Error(err.Error())
@@ -203,7 +202,7 @@ func configureDefaultNetworking() {
 		}
 	}
 
-	InstallDefaultFlows("nightlight", metadataOfPort)
+	InstallDefaultFlows("nl-transit", metadataOfPort)
 }
 
 func UpdateUEFIImages() {

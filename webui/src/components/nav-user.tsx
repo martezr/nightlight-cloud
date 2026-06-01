@@ -6,6 +6,8 @@ import {
   ChevronsUpDown,
   LogOut,
 } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { logout } from "@/lib/auth"
 
 import {
   Avatar,
@@ -38,6 +40,12 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const navigate = useNavigate()
+
+  async function handleLogout() {
+    await logout()
+    navigate("/login", { replace: true })
+  }
 
   return (
     <SidebarMenu>
@@ -89,7 +97,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOut />
               Log out
             </DropdownMenuItem>

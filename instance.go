@@ -6,24 +6,72 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/hashicorp/go-hclog"
-	"github.com/martezr/go-openvswitch/ovs"
 	"github.com/martezr/nightlight-cloud/compute"
-	"github.com/martezr/nightlight-cloud/network"
+	"github.com/martezr/nightlight-cloud/metadatabackend"
 	"github.com/martezr/nightlight-cloud/utils"
 	"golang.org/x/mobile/event/key"
 )
 
+// normalizeBootOrder reassigns boot orders across all device types so that
+// every device gets a unique value 1..N sorted by the caller's original intent.
+func normalizeBootOrder(instance *utils.Instance) {
+	type entry struct {
+		order      int
+		deviceType string
+		index      int
+	}
+
+	var items []entry
+	for i, d := range instance.Devices.NetworkInterfaces {
+		items = append(items, entry{d.BootOrder, "nic", i})
+	}
+	for i, d := range instance.Devices.StorageDisks {
+		items = append(items, entry{d.BootOrder, "disk", i})
+	}
+	for i, d := range instance.Devices.CDROMs {
+		items = append(items, entry{d.BootOrder, "cdrom", i})
+	}
+	for i, d := range instance.Devices.FloppyDisks {
+		items = append(items, entry{d.BootOrder, "floppy", i})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].order < items[j].order
+	})
+
+	for seq, item := range items {
+		newOrder := seq + 1
+		switch item.deviceType {
+		case "nic":
+			instance.Devices.NetworkInterfaces[item.index].BootOrder = newOrder
+		case "disk":
+			instance.Devices.StorageDisks[item.index].BootOrder = newOrder
+		case "cdrom":
+			instance.Devices.CDROMs[item.index].BootOrder = newOrder
+		case "floppy":
+			instance.Devices.FloppyDisks[item.index].BootOrder = newOrder
+		}
+	}
+}
+
 func ListInstances(w http.ResponseWriter, r *http.Request) {
 	var instances []utils.Instance
-	err := db.All(&instances)
-	if err != nil {
+	if err := db.All(&instances); err != nil {
 		hclog.Default().Named("core").Error(err.Error())
+	}
+	ids := make([]string, len(instances))
+	for i, inst := range instances {
+		ids[i] = inst.ID
+	}
+	states := compute.ListVMPowerStates(ids)
+	for i := range instances {
+		instances[i].PowerState = states[instances[i].ID]
 	}
 	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(instances))
 }
@@ -54,7 +102,7 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if instance.Devices.NetworkInterfaces[0].BridgeName == "" {
-		http.Error(w, "vpcId is required", http.StatusBadRequest)
+		http.Error(w, "bridgeName is required", http.StatusBadRequest)
 		return
 	}
 
@@ -81,6 +129,10 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 		outputInstance.Devices.StorageDisks[i].Path = diskPath
 	}
 
+	normalizeBootOrder(&outputInstance)
+	if outputInstance.InstanceType == "" {
+		outputInstance.InstanceType = "virtualmachine"
+	}
 	compute.CreateVM(outputInstance, instancePath)
 	vncPort, err := compute.GetVNCPort(outputInstance.ID)
 	if err != nil {
@@ -88,69 +140,76 @@ func CreateInstance(w http.ResponseWriter, r *http.Request) {
 	}
 	outputInstance.VNCPort = vncPort
 
-	// Allocate primary IP address for the instance's first network interface
-	hclog.Default().Named("core").Info("Allocating IP address for instance:", outputInstance.ID)
-	primaryIP, err := AllocateIPAddress(instance.Devices.NetworkInterfaces[0].VPCId, outputInstance.ID, instance.Devices.NetworkInterfaces[0].MacAddress)
-	if err != nil {
-		hclog.Default().Named("core").Error(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	outputInstance.PrimaryIPAddress = primaryIP
 	outputInstance.PrimaryMacAddress = instance.Devices.NetworkInterfaces[0].MacAddress
+
+	// Allocate a primary IP from the subnet pool when DHCP is enabled.
+	firstNIC := outputInstance.Devices.NetworkInterfaces[0]
+	if firstNIC.SubnetId != "" {
+		subnet := FindSubnetByID(firstNIC.SubnetId)
+		if subnet.DHCPServer {
+			primaryIP, err := AllocateIPAddress(firstNIC.SubnetId, outputInstance.ID, firstNIC.MacAddress)
+			if err != nil {
+				hclog.Default().Named("core").Error(err.Error())
+				http.Error(w, "failed to allocate IP address: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			outputInstance.PrimaryIPAddress = primaryIP
+			hclog.Default().Named("core").Info(fmt.Sprintf("Allocated IP %s for instance %s", primaryIP, outputInstance.ID))
+		}
+	}
 	outputInstance.CreatedAt = time.Now().GoString()
 	db.Save(&outputInstance)
-	c := ovs.New()
-	ports, err := c.VSwitch.ListPorts("nightlight")
-	if err != nil {
-		hclog.Default().Named("core").Error(err.Error())
-	}
-	var ofPort int
-	var metadataOfPort int
-	var dhcpOfPort int
-	for _, port := range ports {
-		portDetails, err := c.VSwitch.Get.Port(port)
-		fmt.Printf("Existing port: %s - Port Number: %s\n", port, portDetails.OFPort)
-		if err != nil {
-			hclog.Default().Named("core").Error(err.Error())
-		}
-		if portDetails.Name == "mddefaultvpc" {
-			metadataOfPort, err = strconv.Atoi(portDetails.OFPort)
-			if err != nil {
-				hclog.Default().Named("core").Error(err.Error())
-			}
-			continue
-		}
-		if portDetails.Name == "dhdefaultvpc" {
-			dhcpOfPort, err = strconv.Atoi(portDetails.OFPort)
-			if err != nil {
-				hclog.Default().Named("core").Error(err.Error())
-			}
-			continue
-		}
-		if portDetails.ExternalIds.AttachedMac == outputInstance.Devices.NetworkInterfaces[0].MacAddress {
-			fmt.Println("Port already exists for MAC:", outputInstance.Devices.NetworkInterfaces[0].MacAddress)
-			iPort, err := strconv.Atoi(portDetails.OFPort)
-			if err != nil {
-				hclog.Default().Named("core").Error(err.Error())
-			} else {
-				ofPort = iPort
-			}
-		}
-	}
+	// c := ovs.New()
+	// ports, err := c.VSwitch.ListPorts(instance.Devices.NetworkInterfaces[0].BridgeName)
+	// if err != nil {
+	// 	hclog.Default().Named("core").Error(err.Error())
+	// }
+	// var ofPort int
+	// var metadataOfPort int
+	// var dhcpOfPort int
+	// for _, port := range ports {
+	// 	portDetails, err := c.VSwitch.Get.Port(port)
+	// 	fmt.Printf("Existing port: %s - Port Number: %s\n", port, portDetails.OFPort)
+	// 	if err != nil {
+	// 		hclog.Default().Named("core").Error(err.Error())
+	// 	}
+	// 	if portDetails.Name == "mddefaultvnet" {
+	// 		metadataOfPort, err = strconv.Atoi(portDetails.OFPort)
+	// 		if err != nil {
+	// 			hclog.Default().Named("core").Error(err.Error())
+	// 		}
+	// 		continue
+	// 	}
+	// 	if portDetails.Name == "dhdefaultvnet" {
+	// 		dhcpOfPort, err = strconv.Atoi(portDetails.OFPort)
+	// 		if err != nil {
+	// 			hclog.Default().Named("core").Error(err.Error())
+	// 		}
+	// 		continue
+	// 	}
+	// 	if portDetails.ExternalIds.AttachedMac == outputInstance.Devices.NetworkInterfaces[0].MacAddress {
+	// 		fmt.Println("Port already exists for MAC:", outputInstance.Devices.NetworkInterfaces[0].MacAddress)
+	// 		iPort, err := strconv.Atoi(portDetails.OFPort)
+	// 		if err != nil {
+	// 			hclog.Default().Named("core").Error(err.Error())
+	// 		} else {
+	// 			ofPort = iPort
+	// 		}
+	// 	}
+	// }
 
-	hclog.Default().Named("core").Info(fmt.Sprintf("Adding OVS flows for instance %s on port %d (metadata port: %d, DHCP port: %d)", outputInstance.ID, ofPort, metadataOfPort, dhcpOfPort))
-	network.AddVMFlows("nightlight", outputInstance.Devices.NetworkInterfaces[0].MacAddress, ofPort, metadataOfPort, dhcpOfPort)
+	// hclog.Default().Named("core").Info(fmt.Sprintf("Adding OVS flows for instance %s on port %d (metadata port: %d, DHCP port: %d)", outputInstance.ID, ofPort, metadataOfPort, dhcpOfPort))
+	// network.AddVMFlows(instance.Devices.NetworkInterfaces[0].BridgeName, outputInstance.Devices.NetworkInterfaces[0].MacAddress, ofPort, metadataOfPort, dhcpOfPort)
 	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(outputInstance))
 }
 
 func GetInstance(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	var instance utils.Instance
-	err := db.One("ID", id, &instance)
-	if err != nil {
+	if err := db.One("ID", id, &instance); err != nil {
 		hclog.Default().Named("core").Error(err.Error())
 	}
+	instance.PowerState = compute.GetVMPowerState(instance.ID)
 	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(instance))
 }
 
@@ -167,13 +226,24 @@ func DeleteInstance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		hclog.Default().Named("core").Error(err.Error())
 	}
-	// Release allocated IP addressfor the instance's first network interface
-	hclog.Default().Named("core").Info("Releasing IP address for instance:", instance.ID)
 
-	err = ReleaseIPAddress(instance.Devices.NetworkInterfaces[0].VPCId, instance.ID)
-	if err != nil {
-		hclog.Default().Named("core").Error(err.Error())
+	// Release the DHCP-allocated IP back to the subnet pool.
+	if len(instance.Devices.NetworkInterfaces) > 0 && instance.PrimaryIPAddress != "" {
+		firstNIC := instance.Devices.NetworkInterfaces[0]
+		if firstNIC.SubnetId != "" {
+			subnet := FindSubnetByID(firstNIC.SubnetId)
+			if subnet.DHCPServer {
+				if err := ReleaseIPAddress(instance.PrimaryIPAddress, firstNIC.SubnetId); err != nil {
+					hclog.Default().Named("core").Error(err.Error())
+				} else {
+					hclog.Default().Named("core").Info(fmt.Sprintf("Released IP %s for instance %s", instance.PrimaryIPAddress, instance.ID))
+				}
+			}
+		}
 	}
+
+	// Remove stale SDN switch-port → instance mappings from the metadata cache.
+	metadatabackend.ClearInstanceMappings(db, instance.ID)
 
 	// Remove instance directory
 	instancePath := fmt.Sprintf("%s/%s", datastore.LocalPath, instance.ID)
@@ -183,28 +253,28 @@ func DeleteInstance(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Remove OVS flows
-	c := ovs.New()
-	ports, err := c.VSwitch.ListPorts("nightlight")
-	if err != nil {
-		hclog.Default().Named("core").Error(err.Error())
-	}
-	var ofPort int
-	for _, port := range ports {
-		portDetails, err := c.VSwitch.Get.Port(port)
-		if err != nil {
-			hclog.Default().Named("core").Error(err.Error())
-		}
-		if portDetails.ExternalIds.AttachedMac == instance.Devices.NetworkInterfaces[0].MacAddress {
-			iPort, err := strconv.Atoi(portDetails.OFPort)
-			if err != nil {
-				hclog.Default().Named("core").Error(err.Error())
-			} else {
-				ofPort = iPort
-			}
-		}
-	}
+	// c := ovs.New()
+	// ports, err := c.VSwitch.ListPorts(instance.Devices.NetworkInterfaces[0].BridgeName)
+	// if err != nil {
+	// 	hclog.Default().Named("core").Error(err.Error())
+	// }
+	// var ofPort int
+	// for _, port := range ports {
+	// 	portDetails, err := c.VSwitch.Get.Port(port)
+	// 	if err != nil {
+	// 		hclog.Default().Named("core").Error(err.Error())
+	// 	}
+	// 	if portDetails.ExternalIds.AttachedMac == instance.Devices.NetworkInterfaces[0].MacAddress {
+	// 		iPort, err := strconv.Atoi(portDetails.OFPort)
+	// 		if err != nil {
+	// 			hclog.Default().Named("core").Error(err.Error())
+	// 		} else {
+	// 			ofPort = iPort
+	// 		}
+	// 	}
+	// }
 
-	network.RemoveVMFlows("nightlight", ofPort)
+	// network.RemoveVMFlows(instance.Devices.NetworkInterfaces[0].BridgeName, ofPort)
 }
 
 func RestartInstance(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +285,23 @@ func RestartInstance(w http.ResponseWriter, r *http.Request) {
 		hclog.Default().Named("core").Error(err.Error())
 	}
 	compute.RestartVM(instance.ID)
+	vncPort, err := compute.GetVNCPort(instance.ID)
+	if err != nil {
+		hclog.Default().Named("core").Error(err.Error())
+	}
+	instance.VNCPort = vncPort
+	db.Save(&instance)
+	json.NewEncoder(w).Encode(utils.NilSliceToEmptySlice(instance))
+}
+
+func ResetInstance(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var instance utils.Instance
+	err := db.One("ID", id, &instance)
+	if err != nil {
+		hclog.Default().Named("core").Error(err.Error())
+	}
+	compute.ResetVM(instance.ID)
 	vncPort, err := compute.GetVNCPort(instance.ID)
 	if err != nil {
 		hclog.Default().Named("core").Error(err.Error())
@@ -281,20 +368,20 @@ func FindInstanceByMacAddress(mac string) (dhcpRecord DHCPPayload, found bool) {
 	for _, instance := range instances {
 		for _, nic := range instance.Devices.NetworkInterfaces {
 			if nic.MacAddress == mac {
-				vpc := FindVPCByID(nic.VPCId) // touch VPC to update last used timestamp for IP allocation logic
+				subnet := FindSubnetByID(nic.SubnetId) // touch Subnet to update last used timestamp for IP allocation logic
 				var payload DHCPPayload
 				payload.IPAddress = instance.PrimaryIPAddress
-				payload.Gateway = vpc.Gateway // Set the gateway if available
-				payload.DNSServers = vpc.DNSServers
-				payload.DomainName = vpc.DomainName
-				payload.NTPServers = vpc.NTPServers
-				// convert vpc.CIDRBlock from CIDR notation to netmask
-				if _, ipnet, err := net.ParseCIDR(vpc.CIDRBlock); err == nil {
+				payload.Gateway = subnet.Gateway // Set the gateway if available
+				payload.DNSServers = subnet.DNSServers
+				payload.DomainName = subnet.DomainName
+				payload.NTPServers = subnet.NTPServers
+				// convert subnet.CIDRBlock from CIDR notation to netmask
+				if _, ipnet, err := net.ParseCIDR(subnet.CIDRBlock); err == nil {
 					ones, bits := ipnet.Mask.Size()
 					mask := net.CIDRMask(ones, bits)
 					payload.Netmask = fmt.Sprintf("%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3])
 				} else {
-					hclog.Default().Named("core").Error(fmt.Sprintf("invalid CIDR %s: %v", vpc.CIDRBlock, err))
+					hclog.Default().Named("core").Error(fmt.Sprintf("invalid CIDR %s: %v", subnet.CIDRBlock, err))
 				}
 
 				return payload, true

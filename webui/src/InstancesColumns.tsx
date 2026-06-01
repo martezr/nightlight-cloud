@@ -10,8 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ArrowUpDown, MoreHorizontal } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
-import { IconCircleCheckFilled, IconLoader } from "@tabler/icons-react"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +34,8 @@ export type Instance = {
   version: string
   description: string
   initializationStatus: string
+  powerState: string
+  instanceType: string
   cpuCores: string
   cpuSockets: string
   memoryMB: string
@@ -47,12 +47,12 @@ export type Instance = {
 export type InstanceDevices = {
   networkInterfaces: InstanceNetworkInterface[]
   cdroms: InstanceCDROM[]
-  disks: InstanceDisk[]
+  storageDisks: InstanceDisk[]
 }
 
 export type InstanceNetworkInterface = {
   id: string
-  vpcId: string
+  subnetId: string
   macAddress: string
   bridgeName: string
   connected: boolean
@@ -128,18 +128,33 @@ export const columns: ColumnDef<Instance>[] = [
     ),
   },
   {
-    accessorKey: "initializationStatus",
-    header: "Status",
-    cell: ({ row }) => (
-      <Badge variant="outline" className="text-muted-foreground px-1.5">
-        {row.original.initializationStatus === "connected" ? (
-          <IconCircleCheckFilled className="fill-green-500 dark:fill-green-400" />
-        ) : (
-          <IconLoader />
-        )}
-        initializing
-      </Badge>
-    ),
+    accessorKey: "powerState",
+    header: "Power State",
+    cell: ({ row }) => {
+      const state: string = row.getValue("powerState") ?? "unknown"
+      const colours: Record<string, string> = {
+        running:       "bg-emerald-50 text-emerald-700 border-emerald-200",
+        stopped:       "bg-gray-100 text-gray-500 border-gray-200",
+        paused:        "bg-yellow-50 text-yellow-700 border-yellow-200",
+        "shutting-down": "bg-orange-50 text-orange-700 border-orange-200",
+        crashed:       "bg-red-50 text-red-700 border-red-200",
+      }
+      const dotColours: Record<string, string> = {
+        running:       "bg-emerald-500",
+        stopped:       "bg-gray-400",
+        paused:        "bg-yellow-500",
+        "shutting-down": "bg-orange-500",
+        crashed:       "bg-red-500",
+      }
+      const cls = colours[state] ?? "bg-gray-100 text-gray-500 border-gray-200"
+      const dot = dotColours[state] ?? "bg-gray-400"
+      return (
+        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
+          <span className={`size-1.5 rounded-full ${dot}`} />
+          {state}
+        </span>
+      )
+    },
   },
   {
     accessorKey: "description",

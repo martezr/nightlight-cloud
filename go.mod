@@ -14,8 +14,7 @@ require (
 	github.com/hashicorp/go-getter/v2 v2.2.3
 	github.com/hashicorp/go-hclog v1.6.3
 	github.com/insomniacslk/dhcp v0.0.0-20251020182700-175e84fbb167
-	github.com/martezr/go-openvswitch v0.0.0-20250815183327-516c744b7db8
-	github.com/ovn-org/libovsdb v0.6.0
+	github.com/martezr/go-openvswitch v0.0.0-20260505202710-3016919dac8b
 	go.etcd.io/bbolt v1.3.10
 	libvirt.org/go/libvirtxml v1.10003.0
 )
@@ -26,15 +25,10 @@ require (
 	github.com/u-root/uio v0.0.0-20230220225925-ffce2a382923 // indirect
 )
 
-//replace github.com/martezr/go-openvswitch => ../go-openvswitch
-
 require (
 	github.com/DataDog/datadog-agent/pkg/util/log v0.52.1 // indirect
 	github.com/DataDog/datadog-agent/pkg/util/scrubber v0.52.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
-	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/cenkalti/hub v1.0.1 // indirect
-	github.com/cenkalti/rpc2 v0.0.0-20210220005819-4a29bc83afe1 // indirect
 	github.com/cihub/seelog v0.0.0-20170130134532-f561c5e57575 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/evangwt/go-bufcopy v0.1.1 // indirect

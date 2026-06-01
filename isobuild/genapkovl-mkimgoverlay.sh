@@ -1,5 +1,8 @@
 #!/bin/sh -e
 
+mkdir -p /boot
+ln -sf vmlinuz-lts /boot/vmlinuz
+
 HOSTNAME="$1"
 if [ -z "$HOSTNAME" ]; then
 	echo "usage: $0 hostname"
@@ -32,21 +35,10 @@ makefile root:root 0644 "$tmp"/etc/hostname <<EOF
 $HOSTNAME
 EOF
 
-cp /aports/scripts/nightlight-cloud "$tmp"/etc/nightlight-cloud
-cp /aports/scripts/metadataagent "$tmp"/etc/metadataagent
-cp /aports/scripts/dhcpagent "$tmp"/etc/dhcpagent
-cp /aports/scripts/flowmonitoragent "$tmp"/etc/flowmonitoragent
-cp /aports/scripts/nightlight-config "$tmp"/etc/nightlight-config
-cp /aports/scripts/OVMF_CODE.secboot.fd "$tmp"/etc/OVMF_CODE.secboot.fd
-cp /aports/scripts/OVMF_VARS.secboot.fd "$tmp"/etc/OVMF_VARS.secboot.fd
-cp /aports/scripts/OVMF_CODE_4M.ms.fd "$tmp"/etc/OVMF_CODE_4M.ms.fd
-cp /aports/scripts/OVMF_VARS_4M.ms.fd "$tmp"/etc/OVMF_VARS_4M.ms.fd
-cp /aports/scripts/virtio-net.rom "$tmp"/etc/virtio-net.rom
-
 chmod 755 "$tmp"/etc/nightlight-cloud
 chmod 755 "$tmp"/etc/metadataagent
 chmod 755 "$tmp"/etc/dhcpagent
-chmod 755 "$tmp"/etc/flowmonitoragent
+#chmod 755 "$tmp"/etc/flowmonitoragent
 chmod 755 "$tmp"/etc/nightlight-config
 
 # create a service file for nightlight-cloud
@@ -107,19 +99,19 @@ depend() {
 EOF
 
 ## Setup Flow Monitor service
-makefile root:root 0755 "$tmp"/etc/init.d/flowmonitoragent <<'EOF'	
-#!/sbin/openrc-run
-#/etc/init.d/flowmonitoragent
-name="flowmonitoragent"
-command="/sbin/ip"
-command_args="netns exec fmdefaultvpc /etc/flowmonitoragent"
-command_user="root"
-pidfile="/var/run/flowmonitoragent.pid"
-command_background="yes"
-depend() {
-	after net
-}
-EOF
+# makefile root:root 0755 "$tmp"/etc/init.d/flowmonitoragent <<'EOF'	
+# #!/sbin/openrc-run
+# #/etc/init.d/flowmonitoragent
+# name="flowmonitoragent"
+# command="/sbin/ip"
+# command_args="netns exec fmdefaultvpc /etc/flowmonitoragent"
+# command_user="root"
+# pidfile="/var/run/flowmonitoragent.pid"
+# command_background="yes"
+# depend() {
+# 	after net
+# }
+# EOF
 
 mkdir -p "$tmp"/etc/network
 makefile root:root 0644 "$tmp"/etc/network/interfaces <<EOF
@@ -138,23 +130,17 @@ EOF
 mkdir -p "$tmp"/etc/apk
 makefile root:root 0644 "$tmp"/etc/apk/world <<EOF
 alpine-base
-iproute2
-tcpdump
-supervisor
 openvswitch
 libvirt
 libvirt-daemon
-qemu-hw-usb-host
 qemu-img
-qemu-system-x86_64
 ovmf
-qemu-modules 
 openrc
 openssh
 swtpm
 edk2
-qemu-system-i386
 nfs-utils
+e2fsprogs
 EOF
 
 #modprobe kvm_intel
@@ -175,7 +161,7 @@ rc_add syslog boot
 rc_add sshd boot
 rc_add libvirtd boot
 rc_add nightlight-config boot
-rc_add nightlight-cloud boot
+#rc_add nightlight-cloud boot
 #rc_add iptables boot
 
 # Open vSwitch services

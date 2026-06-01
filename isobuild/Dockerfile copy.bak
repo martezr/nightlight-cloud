@@ -1,0 +1,159 @@
+FROM alpine:3.23
+
+ENV alpineVersion=3.23
+ENV TMPDIR=/root/tmp
+ENV ABUILD_USER=builder
+ENV HOME=/home/builder
+
+WORKDIR /root
+
+#
+# Base system + build dependencies
+#
+
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+        bash \
+        curl \
+        git \
+        doas \
+        openssh \
+        coreutils \
+        alpine-sdk \
+        abuild \
+        build-base \
+        meson \
+        ninja \
+        samurai \
+        python3 \
+        py3-sphinx \
+        glib-dev \
+        pixman-dev \
+        zlib-dev \
+        linux-headers \
+        xorriso \
+        syslinux \
+        mtools \
+        alpine-conf \
+        squashfs-tools \
+        grub
+
+#
+# Dedicated build user
+#
+
+RUN adduser -D builder && \
+    addgroup builder abuild && \
+    mkdir -p /home/builder/packages && \
+    mkdir -p /home/builder/.abuild && \
+    chown -R builder:builder /home/builder
+
+#
+# Configure doas
+#
+
+RUN mkdir -p /etc/doas.d && \
+    echo "permit nopass builder as root" \
+        > /etc/doas.d/doas.conf
+
+#
+# Generate abuild keys
+#
+
+USER builder
+
+RUN abuild-keygen -a -n
+
+USER root
+
+#
+# Make root aware of builder signing keys
+#
+
+RUN echo 'PACKAGER_PRIVKEY="/home/builder/.abuild/"$(ls /home/builder/.abuild/*.rsa | xargs basename)' \
+    >> /etc/abuild.conf
+
+#
+# Clone Alpine aports
+#
+
+RUN git clone --depth=1 \
+    --branch ${alpineVersion}-stable \
+    https://gitlab.alpinelinux.org/alpine/aports.git \
+    /aports
+
+#
+# Fix mkimage.sh ownership handling
+#
+
+RUN sed -i \
+    's/--initdb --no-chown/--initdb/g' \
+    /aports/scripts/mkimage.sh
+
+RUN chmod +x /aports/scripts/mkimage.sh
+
+#
+# Repository + temp directories
+#
+
+RUN mkdir -p /packages
+RUN mkdir -p ${TMPDIR}
+RUN mkdir -p /iso
+
+#
+# Custom mkimage profiles
+#
+
+COPY mkimg.nightlight.sh /aports/scripts/
+#COPY mkimg.base.sh /aports/scripts/
+#COPY mkimg.standard.sh /aports/scripts/
+
+RUN chmod +x /aports/scripts/mkimg.nightlight.sh
+#RUN chmod +x /aports/scripts/mkimg.base.sh
+#RUN chmod +x /aports/scripts/mkimg.standard.sh
+
+#
+# Overlay generation
+#
+
+COPY genapkovl.sh /aports/scripts/
+RUN chmod +x /aports/scripts/genapkovl.sh
+
+
+# COPY genapkovl-mkimgoverlay.sh \
+#     /aports/scripts/genapkovl-mkimgoverlay.sh
+
+# RUN chmod +x \
+#     /aports/scripts/genapkovl-mkimgoverlay.sh
+
+#
+# Appliance files
+#
+
+#COPY nightlight-cloud /aports/scripts/
+#COPY dhcpagent /aports/scripts/
+#COPY metadataagent /aports/scripts/
+#COPY flowmonitoragent /aports/scripts/
+#COPY nightlight-config /aports/scripts/
+
+#
+# Firmware
+#
+
+COPY OVMF_CODE.secboot.fd /aports/scripts/
+COPY OVMF_VARS.secboot.fd /aports/scripts/
+COPY OVMF_CODE_4M.ms.fd /aports/scripts/
+COPY OVMF_VARS_4M.ms.fd /aports/scripts/
+
+#
+# Base ISO
+#
+
+COPY alpine-nlrouter-v3.22-x86_64.iso \
+    /aports/scripts/
+
+#
+# Default ISO build command
+#
+
+CMD ["sh", "/aports/scripts/mkimage.sh", "--tag", "v3.23", "--arch", "x86_64", "--outdir", "/iso", "--repository", "http://alpine-mirror.grt.local/v3.23/main", "--repository", "http://alpine-mirror.grt.local/v3.23/community", "--profile", "nightlight"]

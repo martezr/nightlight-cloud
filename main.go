@@ -7,9 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -53,12 +51,20 @@ func main() {
 	initialSetup()
 
 	// Connect to the database
-	db = database.StartDB("/opt/nightlight/nightlight.db")
+	db = database.StartDB("/opt/nightlight")
 
 	go metadatabackend.StartMetadataServer(context.Background(), db)
 	go StartDHCPServer(context.Background(), db)
+	go StartIPXEServer(context.Background(), db)
 
 	defaultDatastore()
+	initDefaultUser()
+	// Add logic to check if the wan router instance already exists before creating it
+	// check if /opt/nightlight/volumes/defaultdatastore/wanrouter already exists, if not create the wan router instance and store its disk there
+	if _, err := os.Stat("/opt/nightlight/volumes/defaultdatastore/wanrouter"); os.IsNotExist(err) {
+		createWanRouter()
+	}
+
 	// Setup HTTP server with routes
 	r := chi.NewRouter()
 
@@ -69,47 +75,72 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	// Hosts
-	r.Get("/api/v1/hosts", ListHosts)
+	// Public auth routes
+	r.Post("/api/v1/auth/login", LoginHandler)
+	r.Post("/api/v1/auth/logout", LogoutHandler)
+	r.Get("/api/v1/auth/me", CurrentUserHandler)
+	r.Put("/api/v1/auth/password", ChangePasswordHandler)
 
-	// VPCs
-	r.Post("/api/v1/vpcs", CreateVPC)
-	r.Get("/api/v1/vpcs/{id}", GetVPC)
-	r.Get("/api/v1/vpcs", ListVpcs)
-	r.Put("/api/v1/vpcs/{id}", UpdateVPC)
-	r.Delete("/api/v1/vpcs/{id}", DeleteVPC)
-	r.Get("/api/v1/vpcs/{id}/ips", ListAvailableIPs)
-	r.Get("/api/v1/vpcs/{id}/graph", GetVPCGraph)
-	r.Get("/api/v1/vpcs/{id}/flowlogs", GetVPCFlowLogs)
-	r.Post("/api/v1/vpcs/{id}/ips/release", ReleaseVPCIPAddress)
+	// Protected API routes
+	r.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware)
 
-	// Subnets
-	r.Post("/api/v1/subnets", CreateSubnet)
-	r.Get("/api/v1/subnets", ListSubnets)
-	r.Delete("/api/v1/subnets/{id}", DeleteSubnet)
+		// Hosts
+		r.Get("/api/v1/hosts", ListHosts)
 
-	// Instances
-	r.Get("/api/v1/instances", ListInstances)
-	r.Post("/api/v1/instances", CreateInstance)
-	r.Get("/api/v1/instances/{id}", GetInstance)
-	r.Delete("/api/v1/instances/{id}", DeleteInstance)
-	r.Post("/api/v1/instances/{id}/restart", RestartInstance)
-	r.Post("/api/v1/instances/{id}/stop", StopInstance)
-	r.Post("/api/v1/instances/{id}/start", StartInstance)
-	r.Post("/api/v1/instances/{id}/shutdown", ShutdownInstance)
-	r.Post("/api/v1/instances/{id}/sendkeys", SendInstanceConsoleKeys)
+		// Bridges (live OVS query, read-only)
+		r.Get("/api/v1/bridges", ListBridges)
 
-	// Datastores
-	r.Get("/api/v1/datastores", ListDatastores)
-	r.Post("/api/v1/datastores", CreateDatastore)
-	r.Get("/api/v1/datastores/{id}", GetDatastore)
-	r.Delete("/api/v1/datastores/{id}", DeleteDatastore)
-	r.Get("/api/v1/datastores/{id}/files", ListDatastoreFiles)
-	r.Post("/api/v1/datastores/{id}/files", UploadDatastoreFile)
-	r.Delete("/api/v1/datastores/{id}/files", DeleteDatastoreFile)
-	r.Post("/api/v1/datastores/{id}/fetch", DownloadDatastoreFile)
-	r.Get("/api/v1/version", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"version":"0.0.1"}`))
+		// Sites
+		r.Post("/api/v1/sites", CreateSite)
+		r.Get("/api/v1/sites/{id}", GetSite)
+		r.Get("/api/v1/sites", ListSites)
+		r.Put("/api/v1/sites/{id}", UpdateSite)
+		r.Delete("/api/v1/sites/{id}", DeleteSite)
+		r.Get("/api/v1/sites/{id}/switches", ListSwitchesBySite)
+
+		// Switches
+		r.Post("/api/v1/switches", CreateSwitch)
+		r.Get("/api/v1/switches", ListSwitches)
+		r.Get("/api/v1/switches/{id}", GetSwitch)
+		r.Put("/api/v1/switches/{id}", UpdateSwitch)
+		r.Delete("/api/v1/switches/{id}", DeleteSwitch)
+
+		// Subnets
+		r.Post("/api/v1/subnets", CreateSubnet)
+		r.Get("/api/v1/subnets", ListSubnets)
+		r.Delete("/api/v1/subnets/{id}", DeleteSubnet)
+		r.Get("/api/v1/subnets/{id}", GetSubnet)
+		r.Put("/api/v1/subnets/{id}", UpdateSubnet)
+		r.Get("/api/v1/subnets/{id}/ips", ListAvailableIPs)
+		r.Post("/api/v1/subnets/{id}/ips/release", ReleaseSubnetIPAddress)
+
+		// Instances
+		r.Get("/api/v1/instances", ListInstances)
+		r.Post("/api/v1/instances", CreateInstance)
+		r.Get("/api/v1/instances/{id}", GetInstance)
+		r.Delete("/api/v1/instances/{id}", DeleteInstance)
+		r.Post("/api/v1/instances/{id}/restart", RestartInstance)
+		r.Post("/api/v1/instances/{id}/reset", ResetInstance)
+		r.Post("/api/v1/instances/{id}/stop", StopInstance)
+		r.Post("/api/v1/instances/{id}/start", StartInstance)
+		r.Post("/api/v1/instances/{id}/shutdown", ShutdownInstance)
+		r.Post("/api/v1/instances/{id}/sendkeys", SendInstanceConsoleKeys)
+
+		// Datastores
+		r.Get("/api/v1/datastores", ListDatastores)
+		r.Post("/api/v1/datastores", CreateDatastore)
+		r.Get("/api/v1/datastores/{id}", GetDatastore)
+		r.Delete("/api/v1/datastores/{id}", DeleteDatastore)
+		r.Get("/api/v1/datastores/{id}/files", ListDatastoreFiles)
+		r.Post("/api/v1/datastores/{id}/files", UploadDatastoreFile)
+		r.Delete("/api/v1/datastores/{id}/files", DeleteDatastoreFile)
+		r.Post("/api/v1/datastores/{id}/fetch", DownloadDatastoreFile)
+
+		// Version
+		r.Get("/api/v1/version", func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"version":"0.0.1"}`))
+		})
 	})
 
 	vncProxy := NewVNCProxy()
@@ -186,103 +217,5 @@ func defaultDatastore() {
 		}
 		os.MkdirAll(defaultDatastore.LocalPath, 0755)
 		db.Save(&defaultDatastore)
-	}
-}
-
-func formatAndMount(device, mountPoint string) error {
-	if err := os.MkdirAll(mountPoint, 0755); err != nil {
-		return err
-	}
-
-	if err := exec.Command("mkfs.ext4", device).Run(); err != nil {
-		return err
-	}
-
-	if err := exec.Command("mount", device, mountPoint).Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func mountDisk(device, mountPoint string) error {
-	if err := os.MkdirAll(mountPoint, 0755); err != nil {
-		return err
-	}
-
-	if err := exec.Command("mount", device, mountPoint).Run(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func checkDiskFormatted(diskName string) bool {
-	// Run blkid command to get filesystem info
-	cmd := exec.Command("blkid")
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Fatalf("Error executing blkid command: %s", err)
-	}
-
-	// Convert output to string and check for the disk name and filesystem
-	outputStr := string(output)
-	if strings.Contains(outputStr, diskName) {
-		// Check if the disk has a filesystem (FSTYPE)
-		if strings.Contains(outputStr, "TYPE=") {
-			return true
-		}
-	}
-	return false
-}
-
-// check if a disk is mounted at a given mount point
-func isDiskMounted(mountPoint string) bool {
-	cmd := exec.Command("mountpoint", "-q", mountPoint)
-	err := cmd.Run()
-	return err == nil
-}
-
-func initialSetup() {
-	diskStatus := checkDiskFormatted("/dev/sda")
-	if diskStatus {
-		hclog.Default().Named("core").Info("Disk /dev/sda is already formatted.")
-		if isDiskMounted("/data") {
-			hclog.Default().Named("core").Info("Disk /dev/sda is already mounted at /data.")
-			return
-		}
-		hclog.Default().Named("core").Info("Disk /dev/sda is not mounted. Attempting to mount...")
-		err := mountDisk("/dev/sda", "/data")
-		if err != nil {
-			hclog.Default().Named("core").Error(fmt.Sprintf("Error mounting disk: %v", err))
-		} else {
-			hclog.Default().Named("core").Info("Successfully mounted disk to /data")
-		}
-	} else {
-		hclog.Default().Named("core").Info("Disk /dev/sda is not formatted. Formatting and mounting...")
-		// Create necessary directories
-		dirs := []string{"/opt/nightlight"}
-		for _, dir := range dirs {
-			err := os.MkdirAll(dir, 0755)
-			if err != nil {
-				hclog.Default().Named("core").Error(fmt.Sprintf("Error creating directory %s: %v", dir, err))
-			} else {
-				hclog.Default().Named("core").Info(fmt.Sprintf("Successfully created directory: %s", dir))
-			}
-		}
-		// Format and mount the disk
-		err := formatAndMount("/dev/sda", "/opt/nightlight")
-		if err != nil {
-			hclog.Default().Named("core").Error(fmt.Sprintf("Error formatting and mounting disk: %v", err))
-		} else {
-			hclog.Default().Named("core").Info("Successfully formatted and mounted disk to /opt/nightlight")
-		}
-		// write the current version to a file
-		err = os.WriteFile("/opt/nightlight/version.json", []byte(`{"version":"0.0.1"}`), 0644)
-		if err != nil {
-			hclog.Default().Named("core").Error(fmt.Sprintf("Error writing version file: %v", err))
-		} else {
-			hclog.Default().Named("core").Info("Successfully wrote version file")
-		}
 	}
 }

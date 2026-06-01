@@ -48,13 +48,11 @@ export function NetworkInterfaceModal({
 
   function handleAddInterface() {
     addInterface({
-//      id: crypto.randomUUID(),
-//      bootOrder: 1,
       connected: niConnected,
-//      bridgeName: niBridge,
       bridgeName: "nightlight",
+      vpcId: niBridge,
       model: niModel,
-      mac: niMac,
+      macAddress: niMac,
     })
     // Reset fields
     setNiBridge("")

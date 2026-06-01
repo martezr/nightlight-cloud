@@ -13,19 +13,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-
-import * as React from "react"
-import { useState } from 'react';
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts"
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer"
 import {
   Card,
   CardContent,
@@ -33,208 +20,119 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "./components/ui/button"
-import { SquareTerminal } from "lucide-react"
-import TerminalComponent from "./components/terminal"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Server,
+  Network,
+  Database,
+  Plus,
+  ArrowRight,
+  Cpu,
+  MemoryStick,
+  HardDrive,
+  CirclePlay,
+} from "lucide-react"
+import { Link } from "react-router-dom"
+import * as React from "react"
+import { useState } from "react"
+import { type Instance } from "./InstancesColumns"
 
-export const description = "An interactive bar chart"
+function useResourceCounts() {
+  const [instances, setInstances] = useState<Instance[]>([])
+  const [vnetCount, setVNetCount] = useState<number | null>(null)
+  const [datastoreCount, setDatastoreCount] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
 
-const chartData = [
-  { date: "2024-04-01", desktop: 222, mobile: 150 },
-  { date: "2024-04-02", desktop: 97, mobile: 180 },
-  { date: "2024-04-03", desktop: 167, mobile: 120 },
-  { date: "2024-04-04", desktop: 242, mobile: 260 },
-  { date: "2024-04-05", desktop: 373, mobile: 290 },
-  { date: "2024-04-06", desktop: 301, mobile: 340 },
-  { date: "2024-04-07", desktop: 245, mobile: 180 },
-  { date: "2024-04-08", desktop: 409, mobile: 320 },
-  { date: "2024-04-09", desktop: 59, mobile: 110 },
-  { date: "2024-04-10", desktop: 261, mobile: 190 },
-  { date: "2024-04-11", desktop: 327, mobile: 350 },
-  { date: "2024-04-12", desktop: 292, mobile: 210 },
-  { date: "2024-04-13", desktop: 342, mobile: 380 },
-  { date: "2024-04-14", desktop: 137, mobile: 220 },
-  { date: "2024-04-15", desktop: 120, mobile: 170 },
-  { date: "2024-04-16", desktop: 138, mobile: 190 },
-  { date: "2024-04-17", desktop: 446, mobile: 360 },
-  { date: "2024-04-18", desktop: 364, mobile: 410 },
-  { date: "2024-04-19", desktop: 243, mobile: 180 },
-  { date: "2024-04-20", desktop: 89, mobile: 150 },
-  { date: "2024-04-21", desktop: 137, mobile: 200 },
-  { date: "2024-04-22", desktop: 224, mobile: 170 },
-  { date: "2024-04-23", desktop: 138, mobile: 230 },
-  { date: "2024-04-24", desktop: 387, mobile: 290 },
-  { date: "2024-04-25", desktop: 215, mobile: 250 },
-  { date: "2024-04-26", desktop: 75, mobile: 130 },
-  { date: "2024-04-27", desktop: 383, mobile: 420 },
-  { date: "2024-04-28", desktop: 122, mobile: 180 },
-  { date: "2024-04-29", desktop: 315, mobile: 240 },
-  { date: "2024-04-30", desktop: 454, mobile: 380 },
-  { date: "2024-05-01", desktop: 165, mobile: 220 },
-  { date: "2024-05-02", desktop: 293, mobile: 310 },
-  { date: "2024-05-03", desktop: 247, mobile: 190 },
-  { date: "2024-05-04", desktop: 385, mobile: 420 },
-  { date: "2024-05-05", desktop: 481, mobile: 390 },
-  { date: "2024-05-06", desktop: 498, mobile: 520 },
-  { date: "2024-05-07", desktop: 388, mobile: 300 },
-  { date: "2024-05-08", desktop: 149, mobile: 210 },
-  { date: "2024-05-09", desktop: 227, mobile: 180 },
-  { date: "2024-05-10", desktop: 293, mobile: 330 },
-  { date: "2024-05-11", desktop: 335, mobile: 270 },
-  { date: "2024-05-12", desktop: 197, mobile: 240 },
-  { date: "2024-05-13", desktop: 197, mobile: 160 },
-  { date: "2024-05-14", desktop: 448, mobile: 490 },
-  { date: "2024-05-15", desktop: 473, mobile: 380 },
-  { date: "2024-05-16", desktop: 338, mobile: 400 },
-  { date: "2024-05-17", desktop: 499, mobile: 420 },
-  { date: "2024-05-18", desktop: 315, mobile: 350 },
-  { date: "2024-05-19", desktop: 235, mobile: 180 },
-  { date: "2024-05-20", desktop: 177, mobile: 230 },
-  { date: "2024-05-21", desktop: 82, mobile: 140 },
-  { date: "2024-05-22", desktop: 81, mobile: 120 },
-  { date: "2024-05-23", desktop: 252, mobile: 290 },
-  { date: "2024-05-24", desktop: 294, mobile: 220 },
-  { date: "2024-05-25", desktop: 201, mobile: 250 },
-  { date: "2024-05-26", desktop: 213, mobile: 170 },
-  { date: "2024-05-27", desktop: 420, mobile: 460 },
-  { date: "2024-05-28", desktop: 233, mobile: 190 },
-  { date: "2024-05-29", desktop: 78, mobile: 130 },
-  { date: "2024-05-30", desktop: 340, mobile: 280 },
-  { date: "2024-05-31", desktop: 178, mobile: 230 },
-  { date: "2024-06-01", desktop: 178, mobile: 200 },
-  { date: "2024-06-02", desktop: 470, mobile: 410 },
-  { date: "2024-06-03", desktop: 103, mobile: 160 },
-  { date: "2024-06-04", desktop: 439, mobile: 380 },
-  { date: "2024-06-05", desktop: 88, mobile: 140 },
-  { date: "2024-06-06", desktop: 294, mobile: 250 },
-  { date: "2024-06-07", desktop: 323, mobile: 370 },
-  { date: "2024-06-08", desktop: 385, mobile: 320 },
-  { date: "2024-06-09", desktop: 438, mobile: 480 },
-  { date: "2024-06-10", desktop: 155, mobile: 200 },
-  { date: "2024-06-11", desktop: 92, mobile: 150 },
-  { date: "2024-06-12", desktop: 492, mobile: 420 },
-  { date: "2024-06-13", desktop: 81, mobile: 130 },
-  { date: "2024-06-14", desktop: 426, mobile: 380 },
-  { date: "2024-06-15", desktop: 307, mobile: 350 },
-  { date: "2024-06-16", desktop: 371, mobile: 310 },
-  { date: "2024-06-17", desktop: 475, mobile: 520 },
-  { date: "2024-06-18", desktop: 107, mobile: 170 },
-  { date: "2024-06-19", desktop: 341, mobile: 290 },
-  { date: "2024-06-20", desktop: 408, mobile: 450 },
-  { date: "2024-06-21", desktop: 169, mobile: 210 },
-  { date: "2024-06-22", desktop: 317, mobile: 270 },
-  { date: "2024-06-23", desktop: 480, mobile: 530 },
-  { date: "2024-06-24", desktop: 132, mobile: 180 },
-  { date: "2024-06-25", desktop: 141, mobile: 190 },
-  { date: "2024-06-26", desktop: 434, mobile: 380 },
-  { date: "2024-06-27", desktop: 448, mobile: 490 },
-  { date: "2024-06-28", desktop: 149, mobile: 200 },
-  { date: "2024-06-29", desktop: 103, mobile: 160 },
-  { date: "2024-06-30", desktop: 446, mobile: 400 },
-]
+  React.useEffect(() => {
+    Promise.all([
+      fetch("/api/v1/instances").then((r) => (r.ok ? r.json() : [])),
+      fetch("/api/v1/vnets").then((r) => (r.ok ? r.json() : [])),
+      fetch("/api/v1/datastores").then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([inst, vnets, ds]) => {
+        setInstances(Array.isArray(inst) ? inst : [])
+        setVNetCount(Array.isArray(vnets) ? vnets.length : 0)
+        setDatastoreCount(Array.isArray(ds) ? ds.length : 0)
+      })
+      .catch(() => {
+        setInstances([])
+        setVNetCount(0)
+        setDatastoreCount(0)
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
-const chartConfig = {
-  views: {
-    label: "Page Views",
-  },
-  desktop: {
-    label: "Desktop",
-    color: "var(--chart-2)",
-  },
-  mobile: {
-    label: "Mobile",
-    color: "var(--chart-1)",
-  },
-} satisfies ChartConfig
+  return { instances, vnetCount, datastoreCount, loading }
+}
 
+function StatCard({
+  icon,
+  label,
+  value,
+  href,
+  accent,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: number | null
+  href: string
+  accent?: string
+}) {
+  return (
+    <Link to={href}>
+      <Card className="transition-shadow hover:shadow-md cursor-pointer">
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardDescription className="text-sm font-medium">{label}</CardDescription>
+          <div className={`rounded-md p-2 ${accent ?? "bg-muted"}`}>{icon}</div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-bold tabular-nums">
+            {value === null ? <span className="text-muted-foreground text-xl">—</span> : value}
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
+  )
+}
+
+function InstanceStatusBadge({ status }: { status: string }) {
+  const s = status?.toLowerCase()
+  if (s === "running")
+    return <Badge className="bg-green-500 text-white hover:bg-green-500">Running</Badge>
+  if (s === "stopped")
+    return <Badge variant="secondary">Stopped</Badge>
+  if (s === "error" || s === "failed")
+    return <Badge variant="destructive">{status}</Badge>
+  return <Badge variant="outline">{status || "Unknown"}</Badge>
+}
 
 export default function Page() {
-  const [activeChart, setActiveChart] =
-    React.useState<keyof typeof chartConfig>("desktop")
+  const { instances, vnetCount, datastoreCount, loading } = useResourceCounts()
 
-  const total = React.useMemo(
-    () => ({
-      desktop: chartData.reduce((acc, curr) => acc + curr.desktop, 0),
-      mobile: chartData.reduce((acc, curr) => acc + curr.mobile, 0),
-    }),
-    []
-  )
+  const runningCount = instances.filter(
+    (i) => i.status?.toLowerCase() === "running"
+  ).length
+  const stoppedCount = instances.filter(
+    (i) => i.status?.toLowerCase() === "stopped"
+  ).length
+  const otherCount = instances.length - runningCount - stoppedCount
 
-// Fetch integration count
-//const [integrationCount, setIntegrationCount] = useState<number | null>(null)
+  const statusGroups = [
+    { label: "Running", count: runningCount, color: "bg-green-500" },
+    { label: "Stopped", count: stoppedCount, color: "bg-muted-foreground/30" },
+    ...(otherCount > 0 ? [{ label: "Other", count: otherCount, color: "bg-yellow-400" }] : []),
+  ]
 
-// React.useEffect(() => {
-//   async function fetchIntegrations() {
-//     try {
-//       const res = await fetch("/api/v1/integrations")
-//       if (!res.ok) throw new Error("Failed to fetch integrations")
-//       const data = await res.json()
-//       setIntegrationCount(Array.isArray(data) ? data.length : 0)
-//     } catch {
-//       setIntegrationCount(0)
-//     }
-//   }
-//   fetchIntegrations()
-// }, [])
-
-// Fetch instance count
-const [instanceCount, setInstanceCount] = useState<number | null>(null)
-
-React.useEffect(() => {
-  async function fetchInstances() {
-    try {
-      const res = await fetch("/api/v1/instances")
-      if (!res.ok) throw new Error("Failed to fetch instances")
-      const data = await res.json()
-      setInstanceCount(Array.isArray(data) ? data.length : 0)
-    } catch {
-      setInstanceCount(0)
-    }
-  }
-  fetchInstances()
-}, [])
-
-// Fetch network count
-const [networkCount, setNetworkCount] = useState<number | null>(null)
-
-React.useEffect(() => {
-  async function fetchNetworks() {
-    try {
-      const res = await fetch("/api/v1/vpcs")
-      if (!res.ok) throw new Error("Failed to fetch networks")
-      const data = await res.json()
-      setNetworkCount(Array.isArray(data) ? data.length : 0)
-    } catch {
-      setNetworkCount(0)
-    }
-  }
-  fetchNetworks()
-}, [])
-
-
-// Fetch datastore count
-const [datastoreCount, setDatastoreCount] = useState<number | null>(null)
-
-React.useEffect(() => {
-  async function fetchDatastores() {
-    try {
-      const res = await fetch("/api/v1/datastores")
-      if (!res.ok) throw new Error("Failed to fetch datastores")
-      const data = await res.json()
-      setDatastoreCount(Array.isArray(data) ? data.length : 0)
-    } catch {
-      setDatastoreCount(0)
-    }
-  }
-  fetchDatastores()
-}, [])
-
+  const recentInstances = instances.slice(0, 6)
 
   return (
     <SidebarProvider>
@@ -242,156 +140,221 @@ React.useEffect(() => {
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger className="-ml-1" />
-          <Separator
-            orientation="vertical"
-            className="mr-2 data-[orientation=vertical]:h-4"
-          />
+          <Separator orientation="vertical" className="mr-2 data-[orientation=vertical]:h-4" />
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="#" className="font-bold">
-                  Home
-                </BreadcrumbLink>
+                <BreadcrumbLink href="#" className="font-bold">Dashboard</BreadcrumbLink>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
 
-        <Drawer>
-          <DrawerTrigger className="ml-auto">
-            <Button size="lg" aria-label="Submit">
-              <SquareTerminal />
-              <span className="ml-2">Launch Cloud Shell</span>
-            </Button>
-          </DrawerTrigger>
-          <DrawerContent>
-            <DrawerHeader>
-              <DrawerTitle>Nightlight Cloud Shell</DrawerTitle>
-                    <DrawerClose>
-                <Button variant="outline">Close</Button>
-              </DrawerClose>
-            </DrawerHeader>
-            <div className="flex-1 overflow-y-auto px-4 pb-4">
-                        <TerminalComponent /> 
-
-            </div>
-            <DrawerFooter>
-            </DrawerFooter>
-          </DrawerContent>
-        </Drawer>
-
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-8">
-          <div className="grid auto-rows-min gap-4 md:grid-cols-4">
-            <Card className="@container/card">
+
+        <div className="flex flex-1 flex-col gap-6 p-8">
+
+          {/* Stat cards */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              icon={<Server className="h-4 w-4 text-primary" />}
+              label="Total Instances"
+              value={loading ? null : instances.length}
+              href="/instances"
+              accent="bg-primary/10"
+            />
+            <StatCard
+              icon={<CirclePlay className="h-4 w-4 text-green-600" />}
+              label="Running"
+              value={loading ? null : runningCount}
+              href="/instances"
+              accent="bg-green-500/10"
+            />
+            <StatCard
+              icon={<Network className="h-4 w-4 text-blue-600" />}
+              label="Networks"
+              value={loading ? null : vnetCount}
+              href="/vnets"
+              accent="bg-blue-500/10"
+            />
+            <StatCard
+              icon={<Database className="h-4 w-4 text-orange-600" />}
+              label="Datastores"
+              value={loading ? null : datastoreCount}
+              href="/datastores"
+              accent="bg-orange-500/10"
+            />
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Instance Status Breakdown */}
+            <Card className="lg:col-span-2">
               <CardHeader>
-                <CardDescription>Instances</CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                  {instanceCount}
-                </CardTitle>
+                <CardTitle className="text-base">Instance Status</CardTitle>
+                <CardDescription>Current state across all instances</CardDescription>
               </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <p className="text-sm text-muted-foreground">Loading...</p>
+                ) : instances.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed py-10 text-muted-foreground">
+                    <Server className="h-8 w-8 opacity-30" />
+                    <p className="text-sm">No instances found</p>
+                    <Link to="/instances/createinstance">
+                      <Button size="sm" className="mt-2">
+                        <Plus className="mr-1 h-4 w-4" />
+                        Launch Instance
+                      </Button>
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Visual bar */}
+                    <div className="flex h-4 w-full overflow-hidden rounded-full bg-muted">
+                      {statusGroups.map((g) => (
+                        <div
+                          key={g.label}
+                          className={`${g.color} transition-all`}
+                          style={{ width: `${(g.count / instances.length) * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                    {/* Legend */}
+                    <div className="flex flex-wrap gap-4">
+                      {statusGroups.map((g) => (
+                        <div key={g.label} className="flex items-center gap-2 text-sm">
+                          <span className={`h-3 w-3 rounded-full ${g.color}`} />
+                          <span className="text-muted-foreground">{g.label}</span>
+                          <span className="font-semibold">{g.count}</span>
+                          <span className="text-muted-foreground text-xs">
+                            ({Math.round((g.count / instances.length) * 100)}%)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
             </Card>
-            <Card className="@container/card">
+
+            {/* Quick Actions */}
+            <Card>
               <CardHeader>
-                <CardDescription>Networks</CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                  {networkCount}
-                </CardTitle>
+                <CardTitle className="text-base">Quick Actions</CardTitle>
+                <CardDescription>Common tasks</CardDescription>
               </CardHeader>
-            </Card>
-            <Card className="@container/card">
-              <CardHeader>
-                <CardDescription>Datastores</CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                  {datastoreCount}
-                </CardTitle>
-              </CardHeader>
-            </Card>
-            <Card className="@container/card">
-              <CardHeader>
-                <CardDescription>Workflows</CardDescription>
-                <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
-                  {instanceCount}
-                </CardTitle>
-              </CardHeader>
+              <CardContent className="flex flex-col gap-2">
+                <Link to="/instances/createinstance">
+                  <Button variant="outline" className="w-full justify-between">
+                    <span className="flex items-center gap-2">
+                      <Server className="h-4 w-4" />
+                      Launch Instance
+                    </span>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link to="/vnets">
+                  <Button variant="outline" className="w-full justify-between">
+                    <span className="flex items-center gap-2">
+                      <Network className="h-4 w-4" />
+                      Create Network
+                    </span>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link to="/datastores">
+                  <Button variant="outline" className="w-full justify-between">
+                    <span className="flex items-center gap-2">
+                      <HardDrive className="h-4 w-4" />
+                      Add Datastore
+                    </span>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Separator className="my-1" />
+                <Link to="/instances">
+                  <Button variant="ghost" className="w-full justify-between text-muted-foreground">
+                    View all instances
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+              </CardContent>
             </Card>
           </div>
-    <Card className="py-0">
-      <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
-        <div className="flex flex-1 flex-col justify-center gap-1 px-6 pt-4 pb-3 sm:!py-0">
-          <CardTitle>Workflow Executions</CardTitle>
-          <CardDescription>
-            Showing total visitors for the last 3 months
-          </CardDescription>
-        </div>
-        <div className="flex">
-          {["desktop", "mobile"].map((key) => {
-            const chart = key as keyof typeof chartConfig
-            return (
-              <button
-                key={chart}
-                data-active={activeChart === chart}
-                className="data-[active=true]:bg-muted/50 relative z-30 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
-                onClick={() => setActiveChart(chart)}
-              >
-                <span className="text-muted-foreground text-xs">
-                  {chartConfig[chart].label}
-                </span>
-                <span className="text-lg leading-none font-bold sm:text-3xl">
-                  {total[key as keyof typeof total].toLocaleString()}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </CardHeader>
-      <CardContent className="px-2 sm:p-6">
-        <ChartContainer
-          config={chartConfig}
-          className="aspect-auto h-[250px] w-full"
-        >
-          <BarChart
-            accessibilityLayer
-            data={chartData}
-            margin={{
-              left: 12,
-              right: 12,
-            }}
-          >
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value)
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })
-              }}
-            />
-            <ChartTooltip
-              content={
-                <ChartTooltipContent
-                  className="w-[150px]"
-                  nameKey="views"
-                  labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })
-                  }}
-                />
-              }
-            />
-            <Bar dataKey={activeChart} fill={`var(--color-${activeChart})`} />
-          </BarChart>
-        </ChartContainer>
-      </CardContent>
-    </Card>
+
+          {/* Recent Instances */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base">Recent Instances</CardTitle>
+                <CardDescription>Last {recentInstances.length} instances</CardDescription>
+              </div>
+              <Link to="/instances">
+                <Button variant="ghost" size="sm" className="text-muted-foreground">
+                  View all
+                  <ArrowRight className="ml-1 h-4 w-4" />
+                </Button>
+              </Link>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loading ? (
+                <p className="px-6 py-4 text-sm text-muted-foreground">Loading...</p>
+              ) : recentInstances.length === 0 ? (
+                <p className="px-6 py-4 text-sm text-muted-foreground">No instances yet.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>
+                        <span className="flex items-center gap-1">
+                          <Cpu className="h-3 w-3" /> CPU
+                        </span>
+                      </TableHead>
+                      <TableHead>
+                        <span className="flex items-center gap-1">
+                          <MemoryStick className="h-3 w-3" /> Memory
+                        </span>
+                      </TableHead>
+                      <TableHead>IP Address</TableHead>
+                      <TableHead className="w-10" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {recentInstances.map((instance) => (
+                      <TableRow key={instance.id}>
+                        <TableCell className="font-medium">
+                          <Link to={`/instances/${instance.id}`} className="hover:underline">
+                            {instance.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell>
+                          <InstanceStatusBadge status={instance.status} />
+                        </TableCell>
+                        <TableCell>{instance.cpuCores} cores</TableCell>
+                        <TableCell>
+                          {parseInt(instance.memoryMB) >= 1024
+                            ? `${(parseInt(instance.memoryMB) / 1024).toFixed(parseInt(instance.memoryMB) % 1024 === 0 ? 0 : 1)} GB`
+                            : `${instance.memoryMB} MB`}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm text-muted-foreground">
+                          {instance.primaryIPAddress || "—"}
+                        </TableCell>
+                        <TableCell>
+                          <Link to={`/instances/${instance.id}`}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
         </div>
       </SidebarInset>
     </SidebarProvider>

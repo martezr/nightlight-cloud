@@ -205,7 +205,7 @@ export default function Page() {
       {/* VNC */}
       <div className="flex-1 overflow-hidden" style={{ padding: "10px" }}>
         <VncScreen
-          url={`ws://10.0.0.237/ws/${id}`}
+          url={`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/${id}`}
           scaleViewport
           background="#000000"
           ref={ref}

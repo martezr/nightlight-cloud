@@ -16,13 +16,13 @@ chmod +x nightlight-config
 cp nightlight-config ../isobuild/
 cd ..
 
-# build metadata agent
-echo "Building Metadata Agent..."
-cd metadataagent
-env GOOS=linux GOARCH=amd64 go build -o metadataagent
-chmod +x metadataagent
-cp metadataagent ../isobuild/
-cd ..
+# # build metadata agent
+# echo "Building Metadata Agent..."
+# cd metadataagent
+# env GOOS=linux GOARCH=amd64 go build -o metadataagent
+# chmod +x metadataagent
+# cp metadataagent ../isobuild/
+# cd ..
 
 # build flow monitor agent
 echo "Building Flow Monitor Agent..."
@@ -32,13 +32,13 @@ chmod +x flowmonitoragent
 cp flowmonitoragent ../isobuild/
 cd ..
 
-# build dhcp agent
-echo "Building DHCP Agent..."
-cd dhcpagent
-env GOOS=linux GOARCH=amd64 go build -o dhcpagent
-chmod +x dhcpagent
-cp dhcpagent ../isobuild/
-cd ..
+# # build dhcp agent
+# echo "Building DHCP Agent..."
+# cd dhcpagent
+# env GOOS=linux GOARCH=amd64 go build -o dhcpagent
+# chmod +x dhcpagent
+# cp dhcpagent ../isobuild/
+# cd ..
 
 # build the docker image
 echo "Building ISO Docker Image..."

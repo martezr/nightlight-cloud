@@ -24,6 +24,8 @@ import { VncScreen } from 'react-vnc';
 import { Link } from "react-router-dom";
 import { InstanceNetworkInterfacesDataTable } from "./InstanceNetworkInterfacesDataTable"
 import { instanceNetworkInterfacsColumns } from "./InstanceNetworkInterfacesColumns"
+import { InstanceDisksDataTable } from "./InstanceDisksDataTable"
+import { instanceDisksColumns } from "./InstanceDisksColumns"
 
 function useInstanceDetails(id?: string) {
     const [data, setData] = useState<Instance | null>(null)
@@ -32,16 +34,25 @@ function useInstanceDetails(id?: string) {
 
     useEffect(() => {
         if (!id) return
+
+        const fetchData = () =>
+            fetch(`/api/v1/instances/${id}`).then((res) => {
+                if (!res.ok) throw new Error("Failed to fetch instance details")
+                return res.json() as Promise<Instance>
+            })
+
         setLoading(true)
         setError(null)
-        fetch(`/api/v1/instances/${id}`)
-            .then((res) => {
-                if (!res.ok) throw new Error("Failed to fetch instance details")
-                return res.json()
-            })
+        fetchData()
             .then(setData)
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false))
+
+        const interval = setInterval(() => {
+            fetchData().then(setData).catch(() => {})
+        }, 10_000)
+
+        return () => clearInterval(interval)
     }, [id])
 
     return { data, loading, error }
@@ -155,6 +166,20 @@ console.log("Instance data:", error);
             >
             Restart Instance
             </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={async () => {
+              if (!id) return;
+              try {
+              await fetch(`/api/v1/instances/${id}/reset`, { method: "POST" });
+              // Optionally, show a notification or refresh data here
+              } catch (err) {
+              // Optionally, handle error here
+              console.error("Failed to reset instance", err);
+              }
+            }}
+            >
+            Reset Instance
+            </DropdownMenuItem>
               <DropdownMenuSeparator />
         <AlertDialog>
           <AlertDialogTrigger asChild>
@@ -231,8 +256,30 @@ console.log("Instance data:", error);
                 {/* Top Summary Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="rounded-2xl border p-4 shadow-sm">
-                    <p className="text-sm text-muted-foreground">Status</p>
-                    <p className="text-xl font-semibold">{data.status}</p>
+                    <p className="text-sm text-muted-foreground mb-2">Power State</p>
+                    {(() => {
+                      const state = data.powerState ?? "unknown"
+                      const colours: Record<string, string> = {
+                        running:         "bg-emerald-50 text-emerald-700 border-emerald-200",
+                        stopped:         "bg-gray-100 text-gray-500 border-gray-200",
+                        paused:          "bg-yellow-50 text-yellow-700 border-yellow-200",
+                        "shutting-down": "bg-orange-50 text-orange-700 border-orange-200",
+                        crashed:         "bg-red-50 text-red-700 border-red-200",
+                      }
+                      const dots: Record<string, string> = {
+                        running:         "bg-emerald-500",
+                        stopped:         "bg-gray-400",
+                        paused:          "bg-yellow-500",
+                        "shutting-down": "bg-orange-500",
+                        crashed:         "bg-red-500",
+                      }
+                      return (
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${colours[state] ?? "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                          <span className={`size-2 rounded-full ${dots[state] ?? "bg-gray-400"}`} />
+                          {state}
+                        </span>
+                      )
+                    })()}
                   </div>
 
                   <div className="rounded-2xl border p-4 shadow-sm">
@@ -318,13 +365,13 @@ console.log("Instance data:", error);
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">VPC</p>
-                      <p className="font-medium">{data.devices.networkInterfaces[0].vpcId || "N/A"}</p>
+                      <p className="text-muted-foreground">Subnet</p>
+                      <p className="font-medium">{data.devices.networkInterfaces[0].subnetId || "N/A"}</p>
                     </div>
 
                     <div>
-                      <p className="text-muted-foreground">Subnet</p>
-                      <p className="font-medium">{data.status || "N/A"}</p>
+                      <p className="text-muted-foreground">Bridge</p>
+                      <p className="font-medium">{data.devices.networkInterfaces[0].bridgeName || "N/A"}</p>
                     </div>
                   </div>
                 </div>
@@ -350,9 +397,17 @@ console.log("Instance data:", error);
             )}
           </TabsContent>
         <TabsContent style={{padding: '1rem'}} value="console">
+          {data?.powerState !== "running" && (
+            <div className="mb-4 rounded-lg bg-yellow-50 p-4">
+              <p className="text-sm text-yellow-700">
+                The instance is currently {data?.powerState}. Please start the instance to access the console.
+              </p>
+            </div>
+          )}
+          {data?.powerState === "running" && (
           <div>
             <VncScreen
-              url={`ws://10.0.0.237/ws/${id}`}
+              url={`${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/${id}`}
               scaleViewport
               background="#000000"
               style={{
@@ -362,11 +417,13 @@ console.log("Instance data:", error);
               ref={ref}
             />
           </div>
+          )}
         </TabsContent>
         <TabsContent style={{padding: '1rem'}} value="networking">
             <InstanceNetworkInterfacesDataTable columns={instanceNetworkInterfacsColumns} data={data?.devices.networkInterfaces || []} />
         </TabsContent>
         <TabsContent style={{padding: '1rem'}} value="storage">
+            <InstanceDisksDataTable columns={instanceDisksColumns} data={data?.devices.storageDisks || []} />
         </TabsContent>
         <TabsContent style={{padding: '1rem'}} value="snapshots">
         </TabsContent>

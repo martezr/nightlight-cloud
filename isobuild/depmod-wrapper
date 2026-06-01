@@ -1,0 +1,20 @@
+#!/bin/sh
+# depmod wrapper: creates vmlinuz symlinks before invoking real depmod.
+# Newer kmod does fstatat(basedir_fd, "vmlinuz") — needs symlink at basedir root
+# AND fstatat(bootdir_fd, "vmlinuz") — needs symlink inside boot/.
+prev=""
+for arg in "$@"; do
+    if [ "$prev" = "-b" ]; then
+        for f in "$arg"/boot/vmlinuz-*; do
+            [ -f "$f" ] || continue
+            flavor="${f##*/}"
+            # symlink at basedir/vmlinuz -> boot/vmlinuz-<flavor>
+            [ -e "$arg/vmlinuz" ] || ln -sf "boot/$flavor" "$arg/vmlinuz"
+            # symlink at basedir/boot/vmlinuz -> vmlinuz-<flavor>
+            [ -e "$arg/boot/vmlinuz" ] || ln -sf "$flavor" "$arg/boot/vmlinuz"
+            break
+        done
+    fi
+    prev="$arg"
+done
+exec /sbin/depmod.real "$@"

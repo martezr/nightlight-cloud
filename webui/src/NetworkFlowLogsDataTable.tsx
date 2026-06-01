@@ -7,7 +7,6 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
- // type RowData,
   useReactTable,
 } from "@tanstack/react-table"
 import {
@@ -53,7 +52,7 @@ export function NetworkFlowsDataTable<TData, TValue>({
       <div className="flex items-center justify-between">
         <div className="flex flex-1 items-center gap-2">
         <Input
-          placeholder="Search vpcs..."
+          placeholder="Search vnets..."
           value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("name")?.setFilterValue(event.target.value)

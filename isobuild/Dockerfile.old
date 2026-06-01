@@ -1,0 +1,120 @@
+FROM alpine:3.23
+
+ENV ALPINE_VERSION=3.23
+ENV TMPDIR=/home/builder/tmp
+
+#
+# Build toolchain
+#
+
+RUN apk update && apk upgrade && \
+    apk add --no-cache \
+        bash \
+        coreutils \
+        git \
+        doas \
+        fakeroot \
+        abuild \
+        alpine-sdk \
+        alpine-conf \
+        xorriso \
+        syslinux \
+        mtools \
+        squashfs-tools \
+        grub \
+        grub-efi
+
+#
+# Builder user — mkimage.sh is designed for unprivileged execution
+#
+
+RUN adduser -D builder && \
+    addgroup builder abuild && \
+    mkdir -p /home/builder/tmp /home/builder/.abuild && \
+    chown -R builder:builder /home/builder
+
+RUN mkdir -p /etc/doas.d && \
+    echo "permit nopass builder as root" > /etc/doas.d/doas.conf
+
+#
+# abuild signing key
+#
+
+USER builder
+RUN abuild-keygen -a -n
+USER root
+
+RUN echo "PACKAGER_PRIVKEY=$(ls /home/builder/.abuild/*.rsa)" >> /etc/abuild.conf && \
+    cp /home/builder/.abuild/*.pub /etc/apk/keys/
+
+#
+# Clone aports pinned to Alpine 3.23 stable
+#
+
+RUN git clone --depth=1 \
+    --branch ${ALPINE_VERSION}-stable \
+    https://github.com/alpinelinux/aports.git \
+    /aports && \
+    chown -R builder:builder /aports
+
+RUN chmod +x /aports/scripts/mkimage.sh
+
+#
+# Wrap depmod to pre-create the vmlinuz symlink that newer kmod requires.
+# update-kernel installs the kernel as vmlinuz-<flavor> but depmod looks
+# for plain vmlinuz; without the symlink it prints a non-fatal fstatat error
+# that can abort the modloop build on strict shells.
+#
+
+RUN mv /sbin/depmod /sbin/depmod.real
+COPY depmod-wrapper /sbin/depmod
+RUN chmod +x /sbin/depmod
+
+#
+# Output directory
+#
+
+RUN mkdir -p /iso && chown builder:builder /iso
+
+#
+# ISO build profiles
+#
+
+COPY --chown=builder:builder mkimg.nightlight.sh /aports/scripts/mkimg.nightlight.sh
+COPY --chown=builder:builder mkimg.base.sh /aports/scripts/mkimg.base.sh
+COPY --chown=builder:builder mkimg.standard.sh /aports/scripts/mkimg.standard.sh
+RUN chmod +x \
+    /aports/scripts/mkimg.nightlight.sh \
+    /aports/scripts/mkimg.base.sh \
+    /aports/scripts/mkimg.standard.sh
+
+#
+# Overlay script
+#
+
+COPY --chown=builder:builder genapkovl.sh /aports/scripts/genapkovl.sh
+RUN chmod +x /aports/scripts/genapkovl.sh
+
+#
+# Appliance binaries and config
+#
+
+COPY --chown=builder:builder nightlight-cloud /aports/scripts/nightlight-cloud
+COPY --chown=builder:builder dhcpagent /aports/scripts/dhcpagent
+COPY --chown=builder:builder metadataagent /aports/scripts/metadataagent
+COPY --chown=builder:builder flowmonitoragent /aports/scripts/flowmonitoragent
+COPY --chown=builder:builder nightlight-config /aports/scripts/nightlight-config
+
+#
+# Build the ISO as the unprivileged builder user
+#
+
+USER builder
+
+CMD ["sh", "/aports/scripts/mkimage.sh", \
+    "--tag", "v3.23", \
+    "--arch", "x86_64", \
+    "--outdir", "/iso", \
+    "--repository", "http://alpine-mirror.grt.local/v3.23/main", \
+    "--repository", "http://alpine-mirror.grt.local/v3.23/community", \
+    "--profile", "nightlight"]

@@ -35,6 +35,8 @@ export default function Page() {
 
   useEffect(() => {
     getData().then(setData)
+    const interval = setInterval(() => getData().then(setData), 10_000)
+    return () => clearInterval(interval)
   }, [])
 
   return (
@@ -65,7 +67,7 @@ export default function Page() {
                 <Button onClick={() => window.location.reload()}>
                   <RefreshCw className="h-4 w-4" />
                 </Button>
-              <Link to="/createinstance">
+              <Link to="/instances/createinstance">
                 <Button
                   type="button"
                   className="ml-auto"

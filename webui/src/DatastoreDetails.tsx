@@ -17,7 +17,7 @@ import { useEffect, useState } from "react"
 import { DataTable } from "./DatastoreDetailsDataTable"
 import { columns, type DatastoreFile } from "./DatastoreDetailsColumns"
 
-function useDatastoreDetails(id?: string) {
+function useDatastoreDetails(id?: string, refreshKey?: number) {
     const [data, setData] = useState<DatastoreFile[] | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
@@ -34,14 +34,15 @@ function useDatastoreDetails(id?: string) {
             .then(setData)
             .catch((err) => setError(err.message))
             .finally(() => setLoading(false))
-    }, [id])
+    }, [id, refreshKey])
 
     return { data, loading, error }
 }
 
 export default function Page() {
 const { id } = useParams();
-const { data, loading, error } = useDatastoreDetails(id);
+const [refreshKey, setRefreshKey] = useState(0);
+const { data, loading, error } = useDatastoreDetails(id, refreshKey);
 if (error) {
     return <div>Error: {error}</div>
 }
@@ -76,7 +77,12 @@ if (error) {
         <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
           {/* <h2 className="text-3xl font-bold tracking-tight">Datastore Details: {id}</h2>
           <h2 className="text-2xl font-bold tracking-tight">Files</h2> */}
-            <DataTable columns={columns} data={data ?? []} />
+            <DataTable
+              columns={columns}
+              data={data ?? []}
+              datastoreId={id}
+              onUploadComplete={() => setRefreshKey((k) => k + 1)}
+            />
         </div>
       </SidebarInset>
     </SidebarProvider>

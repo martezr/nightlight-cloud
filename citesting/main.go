@@ -24,8 +24,8 @@ var (
 	vspherePassword  = "Password123#"
 	datacenterName   = "RiverMeadow"
 	datastoreName    = "datastore1"
-	isoLocalPath     = "../isobuild/iso/alpine-nightlight-v3.22-x86_64.iso"
-	isoDatastorePath = "ISO/alpine-nightlight-v3.22-x86_64.iso"
+	isoLocalPath     = "../isobuild/iso/alpine-nightlight-v3.23-x86_64.iso"
+	isoDatastorePath = "ISO/alpine-nightlight-v3.23-x86_64.iso"
 	networkName      = "External Management Network"
 )
 
