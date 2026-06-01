@@ -3,3 +3,10 @@ nightlight-cloud
 webui/node_modules
 metadataagent/metadataagent
 *.tar.gz
+metadataagent
+dhcpagent
+nightlight-config
+flowagent/flowmonitoragent
+dhcpagent/dhcpagent
+isobuild/flowmonitoragent
+isobuild/metadataagent
